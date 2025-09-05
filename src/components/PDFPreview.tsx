@@ -2,11 +2,14 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { DocumentData } from '@/app/generate/page'
-import * as pdfjsLib from 'pdfjs-dist'
 
-// 配置PDF.js worker
+// 动态导入PDF.js以避免服务端渲染问题
+let pdfjsLib: any = null
 if (typeof window !== 'undefined') {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
+  import('pdfjs-dist').then((pdfjs) => {
+    pdfjsLib = pdfjs
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
+  })
 }
 
 interface PDFPreviewProps {

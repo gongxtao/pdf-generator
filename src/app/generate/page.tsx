@@ -8,12 +8,15 @@ import ContentEditor from '@/components/ContentEditor'
 import PDFPreview from '@/components/PDFPreview'
 import { useToast } from '@/components/ToastManager'
 // 导入文档解析库
-import * as pdfjsLib from 'pdfjs-dist'
 import mammoth from 'mammoth'
 
-// 配置PDF.js worker
+// 动态导入PDF.js以避免服务端渲染问题
+let pdfjsLib: any = null
 if (typeof window !== 'undefined') {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
+  import('pdfjs-dist').then((pdfjs) => {
+    pdfjsLib = pdfjs
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
+  })
 }
 
 // 定义模板类型
@@ -23,6 +26,7 @@ export interface Template {
   description: string
   thumbnail: string
   category: string
+  template_content: string // 模板的CSS样式代码
 }
 
 // 定义文档数据类型
@@ -169,6 +173,7 @@ export default function GeneratePage() {
         title: documentData.title,
         content: documentData.content,
         template: documentData.template?.id || 'business',
+        template_content: documentData.template?.template_content, // 传递模板的CSS样式
         language: documentData.language || 'zh-CN'
       }
 

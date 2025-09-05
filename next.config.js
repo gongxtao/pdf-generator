@@ -12,10 +12,16 @@ const nextConfig = {
       }
     }
     
+    // 在服务端完全忽略 pdfjs-dist
+    if (isServer) {
+      config.externals = config.externals || []
+      config.externals.push('pdfjs-dist')
+    }
+    
     return config
   },
   // 配置外部包
-  serverExternalPackages: ['canvas'],
+  serverExternalPackages: ['canvas', 'pdfjs-dist'],
 }
 
 module.exports = nextConfig

@@ -3,6 +3,16 @@
 import { useState, useEffect } from 'react'
 import { Template } from '@/app/generate/page'
 
+// Local Template interface to ensure type consistency
+interface LocalTemplate {
+  id: string
+  name: string
+  description: string
+  thumbnail: string
+  category: string
+  template_content: string
+}
+
 interface TemplateSelectorProps {
   onTemplateSelect: (template: Template) => void
   selectedTemplate?: Template | null
@@ -10,48 +20,360 @@ interface TemplateSelectorProps {
 }
 
 // 模拟模板数据
-const mockTemplates: Template[] = [
+const mockTemplates: LocalTemplate[] = [
   {
     id: 'template-1',
     name: '商务模板',
     description: '适合商务文档、报告和提案的专业模板',
     thumbnail: '/templates/business.jpg',
-    category: 'business'
+    category: 'business',
+    template_content: `
+      body {
+        font-family: 'Arial', 'Microsoft YaHei', sans-serif;
+        line-height: 1.6;
+        margin: 40px;
+        color: #333;
+        background-color: #ffffff;
+      }
+      h1 {
+        color: #2c3e50;
+        font-size: 28px;
+        font-weight: bold;
+        text-align: center;
+        margin-bottom: 30px;
+        padding-bottom: 15px;
+        border-bottom: 3px solid #3498db;
+      }
+      h2 {
+        color: #34495e;
+        font-size: 20px;
+        margin-top: 25px;
+        margin-bottom: 15px;
+        padding-left: 10px;
+        border-left: 4px solid #3498db;
+      }
+      p {
+        margin-bottom: 15px;
+        text-align: justify;
+        font-size: 14px;
+      }
+      ul, ol {
+        margin-bottom: 15px;
+        padding-left: 30px;
+      }
+      li {
+        margin-bottom: 8px;
+      }
+      .header {
+        text-align: center;
+        margin-bottom: 40px;
+      }
+      .footer {
+        text-align: center;
+        margin-top: 40px;
+        font-size: 12px;
+        color: #7f8c8d;
+      }
+    `
   },
   {
     id: 'template-2',
     name: '学术模板',
     description: '适合学术论文、研究报告的正式模板',
     thumbnail: '/templates/academic.jpg',
-    category: 'academic'
+    category: 'academic',
+    template_content: `
+      body {
+        font-family: 'Times New Roman', 'SimSun', serif;
+        line-height: 1.8;
+        margin: 50px;
+        color: #000;
+        background-color: #ffffff;
+        font-size: 12px;
+      }
+      h1 {
+        font-size: 18px;
+        font-weight: bold;
+        text-align: center;
+        margin-bottom: 40px;
+        color: #000;
+      }
+      h2 {
+        font-size: 16px;
+        font-weight: bold;
+        margin-top: 30px;
+        margin-bottom: 20px;
+        color: #000;
+      }
+      h3 {
+        font-size: 14px;
+        font-weight: bold;
+        margin-top: 20px;
+        margin-bottom: 15px;
+        color: #000;
+      }
+      p {
+        text-indent: 2em;
+        margin-bottom: 15px;
+        text-align: justify;
+      }
+      .abstract {
+        margin: 30px 0;
+        padding: 20px;
+        background-color: #f8f9fa;
+        border-left: 4px solid #6c757d;
+      }
+      .keywords {
+        margin-bottom: 30px;
+        font-style: italic;
+      }
+      .reference {
+        font-size: 11px;
+        margin-top: 40px;
+      }
+    `
   },
   {
     id: 'template-3',
     name: '简历模板',
     description: '现代简洁的个人简历模板',
     thumbnail: '/templates/resume.jpg',
-    category: 'resume'
+    category: 'resume',
+    template_content: `
+      body {
+        font-family: 'Helvetica Neue', 'Arial', 'Microsoft YaHei', sans-serif;
+        line-height: 1.5;
+        margin: 30px;
+        color: #333;
+        background-color: #ffffff;
+      }
+      h1 {
+        color: #2c3e50;
+        font-size: 32px;
+        font-weight: 300;
+        margin-bottom: 10px;
+        text-align: center;
+      }
+      h2 {
+        color: #34495e;
+        font-size: 18px;
+        font-weight: 600;
+        margin-top: 25px;
+        margin-bottom: 15px;
+        padding-bottom: 5px;
+        border-bottom: 2px solid #e74c3c;
+      }
+      h3 {
+        color: #2c3e50;
+        font-size: 16px;
+        font-weight: 500;
+        margin-bottom: 10px;
+      }
+      p {
+        margin-bottom: 12px;
+        font-size: 14px;
+      }
+      .contact-info {
+        text-align: center;
+        margin-bottom: 30px;
+        color: #7f8c8d;
+      }
+      .section {
+        margin-bottom: 25px;
+      }
+      .experience-item {
+        margin-bottom: 20px;
+      }
+      .date {
+        color: #95a5a6;
+        font-style: italic;
+      }
+    `
   },
   {
     id: 'template-4',
     name: '创意模板',
     description: '色彩丰富的创意设计模板',
     thumbnail: '/templates/creative.jpg',
-    category: 'creative'
+    category: 'creative',
+    template_content: `
+      body {
+        font-family: 'Georgia', 'KaiTi', serif;
+        line-height: 1.7;
+        margin: 35px;
+        color: #2c3e50;
+        background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+        font-size: 15px;
+      }
+      h1 {
+        color: #8e44ad;
+        font-size: 30px;
+        font-weight: bold;
+        text-align: center;
+        margin-bottom: 25px;
+        padding: 20px;
+        background: rgba(255, 255, 255, 0.9);
+        border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+      h2 {
+        color: #2980b9;
+        font-size: 22px;
+        margin-top: 30px;
+        margin-bottom: 18px;
+        padding: 10px 15px;
+        background: rgba(52, 152, 219, 0.1);
+        border-radius: 5px;
+        border-left: 5px solid #3498db;
+      }
+      p {
+        margin-bottom: 18px;
+        text-align: justify;
+        background: rgba(255, 255, 255, 0.8);
+        padding: 15px;
+        border-radius: 8px;
+      }
+      ul, ol {
+        background: rgba(255, 255, 255, 0.8);
+        padding: 20px 40px;
+        border-radius: 8px;
+        margin-bottom: 18px;
+      }
+      li {
+        margin-bottom: 10px;
+      }
+    `
   },
   {
     id: 'template-5',
     name: '技术文档模板',
     description: '适合技术文档和API文档的模板',
     thumbnail: '/templates/technical.jpg',
-    category: 'technical'
+    category: 'technical',
+    template_content: `
+      body {
+        font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+        line-height: 1.6;
+        margin: 40px;
+        color: #333;
+        background-color: #f8f9fa;
+      }
+      h1 {
+        color: #212529;
+        font-size: 24px;
+        font-weight: bold;
+        margin-bottom: 20px;
+        padding: 15px;
+        background-color: #e9ecef;
+        border-left: 5px solid #007bff;
+      }
+      h2 {
+        color: #495057;
+        font-size: 20px;
+        margin-top: 25px;
+        margin-bottom: 15px;
+        padding: 10px;
+        background-color: #ffffff;
+        border: 1px solid #dee2e6;
+        border-radius: 4px;
+      }
+      h3 {
+        color: #6c757d;
+        font-size: 16px;
+        margin-top: 20px;
+        margin-bottom: 10px;
+      }
+      p {
+        margin-bottom: 15px;
+        padding: 10px;
+        background-color: #ffffff;
+        border-radius: 4px;
+      }
+      code {
+        background-color: #f1f3f4;
+        padding: 2px 4px;
+        border-radius: 3px;
+        font-family: 'Consolas', 'Monaco', monospace;
+      }
+      pre {
+        background-color: #f8f9fa;
+        padding: 15px;
+        border-radius: 5px;
+        border: 1px solid #e9ecef;
+        overflow-x: auto;
+      }
+    `
   },
   {
     id: 'template-6',
     name: '营销模板',
     description: '适合营销材料和宣传册的模板',
     thumbnail: '/templates/marketing.jpg',
-    category: 'marketing'
+    category: 'marketing',
+    template_content: `
+      body {
+        font-family: 'Arial Black', 'Microsoft YaHei', sans-serif;
+        line-height: 1.5;
+        margin: 30px;
+        color: #2c3e50;
+        background: linear-gradient(45deg, #ff6b6b, #4ecdc4, #45b7d1, #96ceb4);
+        background-size: 400% 400%;
+        animation: gradientShift 15s ease infinite;
+      }
+      @keyframes gradientShift {
+        0% { background-position: 0% 50%; }
+        50% { background-position: 100% 50%; }
+        100% { background-position: 0% 50%; }
+      }
+      h1 {
+        color: #ffffff;
+        font-size: 36px;
+        font-weight: bold;
+        text-align: center;
+        margin-bottom: 30px;
+        padding: 25px;
+        background: rgba(231, 76, 60, 0.9);
+        border-radius: 15px;
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+      }
+      h2 {
+        color: #e74c3c;
+        font-size: 24px;
+        font-weight: bold;
+        margin-top: 25px;
+        margin-bottom: 15px;
+        padding: 15px;
+        background: rgba(255, 255, 255, 0.95);
+        border-radius: 10px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      }
+      p {
+        margin-bottom: 18px;
+        font-size: 16px;
+        padding: 15px;
+        background: rgba(255, 255, 255, 0.9);
+        border-radius: 8px;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+      }
+      .highlight {
+        background-color: #f39c12;
+        color: #ffffff;
+        padding: 5px 10px;
+        border-radius: 5px;
+        font-weight: bold;
+      }
+      .cta {
+        text-align: center;
+        margin: 30px 0;
+        padding: 20px;
+        background: rgba(46, 204, 113, 0.9);
+        border-radius: 10px;
+        color: #ffffff;
+        font-size: 18px;
+        font-weight: bold;
+      }
+    `
   }
 ]
 
@@ -66,12 +388,12 @@ const categories = [
 ]
 
 export default function TemplateSelector({ onTemplateSelect, selectedTemplate, className = '' }: TemplateSelectorProps) {
-  const [templates, setTemplates] = useState<Template[]>([])
-  const [filteredTemplates, setFilteredTemplates] = useState<Template[]>([])
+  const [templates, setTemplates] = useState<LocalTemplate[]>([])
+  const [filteredTemplates, setFilteredTemplates] = useState<LocalTemplate[]>([])
   const [selectedCategory, setSelectedCategory] = useState('all')
   const [searchQuery, setSearchQuery] = useState('')
   const [isLoading, setIsLoading] = useState(true)
-  const [previewTemplate, setPreviewTemplate] = useState<Template | null>(null)
+  const [previewTemplate, setPreviewTemplate] = useState<LocalTemplate | null>(null)
 
   // 加载模板数据
   useEffect(() => {
@@ -114,12 +436,12 @@ export default function TemplateSelector({ onTemplateSelect, selectedTemplate, c
   }, [templates, selectedCategory, searchQuery])
 
   // 处理模板选择
-  const handleTemplateSelect = (template: Template) => {
-    onTemplateSelect(template)
+  const handleTemplateSelect = (template: LocalTemplate) => {
+    onTemplateSelect(template as Template)
   }
 
   // 处理模板预览
-  const handleTemplatePreview = (template: Template) => {
+  const handleTemplatePreview = (template: LocalTemplate) => {
     setPreviewTemplate(template)
   }
 

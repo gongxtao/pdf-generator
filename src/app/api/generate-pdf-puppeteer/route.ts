@@ -6,6 +6,7 @@ interface PDFGenerationRequest {
   title: string;
   content: string;
   template?: 'business' | 'academic' | 'creative';
+  template_content?: string; // 模板的CSS样式代码
   language?: string;
 }
 
@@ -29,7 +30,7 @@ interface PDFGenerationResponse {
  * @returns 格式化的HTML字符串
  */
 function generateHTML(data: PDFGenerationRequest): string {
-  const { title, content, template = 'business', language = 'zh-CN' } = data;
+  const { title, content, template = 'business', template_content, language = 'zh-CN' } = data;
   
   // 根据语言设置字体
   const getFontFamily = (lang: string) => {
@@ -51,7 +52,13 @@ function generateHTML(data: PDFGenerationRequest): string {
   };
 
   // 根据模板设置样式
-  const getTemplateStyles = (template: string) => {
+  const getTemplateStyles = (template: string, customTemplateContent?: string) => {
+    // 如果提供了自定义模板CSS，优先使用
+    if (customTemplateContent) {
+      return customTemplateContent;
+    }
+
+    // 否则使用默认样式
     const baseStyles = `
       body {
         font-family: ${getFontFamily(language)};
@@ -118,7 +125,7 @@ function generateHTML(data: PDFGenerationRequest): string {
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
       <title>${title}</title>
       <style>
-        ${getTemplateStyles(template)}
+        ${getTemplateStyles(template, template_content)}
       </style>
     </head>
     <body>
