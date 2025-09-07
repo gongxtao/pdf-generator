@@ -71,6 +71,17 @@ export default function EditorPage() {
     }
   }, [searchParams, allTemplates])
 
+  // 监听pdfEditorContent变化，确保编辑器内容同步
+  useEffect(() => {
+    if (editorRef.current && pdfEditorContent) {
+      // 只有当编辑器内容与状态不一致时才更新
+      const currentContent = editorRef.current.getContent()
+      if (currentContent !== pdfEditorContent) {
+        editorRef.current.setContent(pdfEditorContent)
+      }
+    }
+  }, [pdfEditorContent])
+
   // 处理模板选择
   const handleTemplateSelect = (template: Template) => {
     setSelectedTemplate(template)
@@ -103,31 +114,31 @@ export default function EditorPage() {
       
       // 生成完整的HTML结构，包含CSS样式
        let htmlContent = `
-         <style>
-           .pdf-container {
-             width: 210mm;
-             margin: 0 auto;
-             font-family: Arial, sans-serif;
-             background: #f5f5f5;
-             padding: 10mm;
-           }
-           .pdf-page {
-             width: 210mm;
-             height: 297mm;
-             margin: 0 auto 10mm auto;
-             background: white;
-             position: relative;
-             box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-             border: 1px solid #ddd;
-             padding: 20mm;
-             box-sizing: border-box;
-             overflow: hidden;
-           }
+          <style>
+            .pdf-container {
+              width: 100%;
+              max-width: 100%;
+              margin: 0;
+              font-family: Arial, sans-serif;
+              background: transparent;
+              padding: 20px;
+              box-sizing: border-box;
+            }
+            .pdf-page {
+              width: 100%;
+              min-height: 100%;
+              margin: 0;
+              background: white;
+              position: relative;
+              padding: 0;
+              box-sizing: border-box;
+              overflow: visible;
+            }
           .pdf-text-item {
-            position: absolute;
-            white-space: nowrap;
-            transform-origin: left bottom;
-            line-height: 1.2;
+            display: inline;
+            line-height: 1.4;
+            word-wrap: break-word;
+            overflow-wrap: break-word;
           }
           .pdf-paragraph {
             margin: 0 0 12px 0;
@@ -208,8 +219,8 @@ export default function EditorPage() {
           colorMap.set(j, currentColor)
         }
 
-        // 开始页面容器
-        htmlContent += `<div class="pdf-page" data-page="${pageNum}">`
+        // 开始页面容器和第一个段落
+        htmlContent += `<div class="pdf-page" data-page="${pageNum}"><p class="pdf-paragraph">`
         
         // 按Y坐标排序文本项并分组为行
         const sortedItems = textItems.sort((a: any, b: any) => {
@@ -273,34 +284,88 @@ export default function EditorPage() {
           try {
             const fontObj = page.commonObjs.get(item.fontName)
             if (fontObj && fontObj.name) {
-              fontFamily = fontObj.name.replace(/[+]/g, '').split(',')[0]
+              // 更精确的字体名称处理
+              let cleanFontName = fontObj.name
+                .replace(/[+]/g, '')
+                .replace(/,.*$/, '') // 移除逗号后的内容
+                .replace(/[-_]/g, ' ') // 将连字符和下划线替换为空格
+                .trim()
               
-              const fontName = fontObj.name.toLowerCase()
-              if (fontName.includes('bold') || fontName.includes('black')) {
-                fontWeight = 'bold'
+              // 提取基础字体族名称
+              const baseFontName = cleanFontName.split(' ')[0]
+              
+              // 更全面的字体族映射
+              const fontFamilyMap: { [key: string]: string } = {
+                'Times': 'Times New Roman, Times, serif',
+                'TimesNewRoman': 'Times New Roman, Times, serif',
+                'Helvetica': 'Helvetica, Arial, sans-serif',
+                'Arial': 'Arial, Helvetica, sans-serif',
+                'Courier': 'Courier New, Courier, monospace',
+                'CourierNew': 'Courier New, Courier, monospace',
+                'Calibri': 'Calibri, Arial, sans-serif',
+                'Verdana': 'Verdana, Arial, sans-serif',
+                'Georgia': 'Georgia, Times, serif',
+                'Tahoma': 'Tahoma, Arial, sans-serif',
+                'SimSun': 'SimSun, "宋体", serif',
+                'SimHei': 'SimHei, "黑体", sans-serif',
+                'Microsoft': 'Microsoft YaHei, "微软雅黑", sans-serif',
+                'PingFang': 'PingFang SC, "苹方", sans-serif'
               }
-              if (fontName.includes('italic') || fontName.includes('oblique')) {
+              
+              // 查找匹配的字体族
+              fontFamily = fontFamilyMap[baseFontName] || fontFamilyMap[cleanFontName] || `"${cleanFontName}", Arial, sans-serif`
+              
+              // 更精确的字体样式识别
+              const fullFontName = fontObj.name.toLowerCase()
+              if (fullFontName.includes('bold') || fullFontName.includes('black') || fullFontName.includes('heavy') || fullFontName.includes('extrabold')) {
+                fontWeight = 'bold'
+              } else if (fullFontName.includes('light') || fullFontName.includes('thin')) {
+                fontWeight = '300'
+              } else if (fullFontName.includes('medium')) {
+                fontWeight = '500'
+              } else if (fullFontName.includes('semibold')) {
+                fontWeight = '600'
+              }
+              
+              if (fullFontName.includes('italic') || fullFontName.includes('oblique')) {
                 fontStyle = 'italic'
               }
             }
           } catch (e) {
-            // 使用默认字体
+            // 使用默认字体处理逻辑
             if (item.fontName) {
               const fontName = item.fontName.toLowerCase()
               
-              // 字体族识别
+              // 更全面的字体族识别
               if (fontName.includes('times')) {
-                fontFamily = 'Times, serif'
+                fontFamily = 'Times New Roman, Times, serif'
               } else if (fontName.includes('helvetica')) {
                 fontFamily = 'Helvetica, Arial, sans-serif'
+              } else if (fontName.includes('arial')) {
+                fontFamily = 'Arial, Helvetica, sans-serif'
               } else if (fontName.includes('courier')) {
-                fontFamily = 'Courier, monospace'
+                fontFamily = 'Courier New, Courier, monospace'
+              } else if (fontName.includes('calibri')) {
+                fontFamily = 'Calibri, Arial, sans-serif'
+              } else if (fontName.includes('verdana')) {
+                fontFamily = 'Verdana, Arial, sans-serif'
+              } else if (fontName.includes('georgia')) {
+                fontFamily = 'Georgia, Times, serif'
+              } else if (fontName.includes('simsun') || fontName.includes('宋体')) {
+                fontFamily = 'SimSun, "宋体", serif'
+              } else if (fontName.includes('simhei') || fontName.includes('黑体')) {
+                fontFamily = 'SimHei, "黑体", sans-serif'
+              } else if (fontName.includes('microsoft') || fontName.includes('微软雅黑')) {
+                fontFamily = 'Microsoft YaHei, "微软雅黑", sans-serif'
               }
               
               // 字体样式识别
-              if (fontName.includes('bold')) {
+              if (fontName.includes('bold') || fontName.includes('black') || fontName.includes('heavy')) {
                 fontWeight = 'bold'
+              } else if (fontName.includes('light') || fontName.includes('thin')) {
+                fontWeight = '300'
               }
+              
               if (fontName.includes('italic') || fontName.includes('oblique')) {
                 fontStyle = 'italic'
               }
@@ -356,19 +421,48 @@ export default function EditorPage() {
             transformCSS = `transform: matrix(${scaleX/fontSize}, ${skewY/fontSize}, ${skewX/fontSize}, ${Math.abs(scaleY)/fontSize}, 0, 0);`
           }
           
-          // 生成文本项HTML，使用绝对定位保持精确布局
-          htmlContent += `
-            <div class="pdf-text-item" style="
-              position: absolute;
-              left: ${x * 0.75}px;
-              top: ${y * 0.75}px;
-              font-size: ${fontSize * 0.75}px;
+          // 检查是否是行末（下一个文本项在新行）
+          let isLineEnd = false
+          let shouldAddParagraph = false
+          
+          if (i < textItems.length - 1) {
+            const nextItem = textItems[i + 1]
+            const currentY = item.transform[5]
+            const nextY = nextItem.transform[5]
+            
+            // 如果下一个文本项的Y坐标不同，说明当前项是行末
+            if (Math.abs(currentY - nextY) > 3) {
+              isLineEnd = true
+              
+              // 如果Y坐标差距较大，可能是段落分隔
+              if (Math.abs(currentY - nextY) > fontSize * 1.5) {
+                shouldAddParagraph = true
+              }
+            }
+          } else {
+            // 最后一个文本项
+            isLineEnd = true
+          }
+          
+          // 生成文本项HTML，使用流式布局自适应容器宽度
+          htmlContent += `<span class="pdf-text-item" style="
+              font-size: ${Math.max(fontSize * 0.75, 12)}px;
               font-family: '${fontFamily}', Arial, sans-serif;
               font-weight: ${fontWeight};
               font-style: ${fontStyle};
               color: ${color};
-              ${transformCSS}
-            ">${escapedText}</div>`
+            ">${escapedText}</span>`
+          
+          // 在行末添加适当的换行或段落分隔
+          if (isLineEnd) {
+            if (shouldAddParagraph) {
+              htmlContent += '</p><p class="pdf-paragraph">'
+            } else {
+              htmlContent += '<br/>'
+            }
+          } else {
+            htmlContent += ' '
+          }
         }
         
         // 尝试提取图片
@@ -411,8 +505,8 @@ export default function EditorPage() {
           console.warn('图片处理出错:', e)
         }
         
-        // 结束页面容器
-         htmlContent += '</div>'
+        // 结束段落和页面容器
+         htmlContent += '</p></div>'
        }
 
        // 闭合容器标签
@@ -564,11 +658,11 @@ export default function EditorPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          template_content: selectedTemplate.template_content,
-          content: isEditMode ? pdfEditorContent.replace(/<[^>]*>/g, '') : content, // 编辑模式使用PDF编辑器内容，否则使用左侧文本内容
           title: selectedTemplate.name,
-          date: new Date().toLocaleDateString('zh-CN'),
-          isHtmlContent: isEditMode // 标识内容是否为HTML格式
+          content: isEditMode ? pdfEditorContent.replace(/<[^>]*>/g, '') : content, // 编辑模式使用PDF编辑器内容，否则使用左侧文本内容
+          template: 'business', // 使用默认模板类型
+          template_content: selectedTemplate.template_content,
+          language: 'zh-CN'
         }),
       })
 
@@ -903,12 +997,19 @@ export default function EditorPage() {
                   
                   {/* PDF编辑区域 */}
                   <div className="flex-1 p-4">
-                    <div className="tinymce-editor-container border border-gray-300 rounded-lg" style={{ height: '1123px', width: 'calc(100% - 2px)', maxWidth: '1230px', margin: '0 auto', overflow: 'auto' }}>
+                    <div className="tinymce-editor-container border border-gray-300 rounded-lg" style={{ height: '1123px', width: '100%', margin: '0 auto', overflow: 'auto' }}>
                       <Editor
                         apiKey={process.env.NEXT_PUBLIC_TINYMCE_API_KEY || 'no-api-key'}
-                        onInit={(evt, editor) => editorRef.current = editor}
+                        onInit={(evt, editor) => {
+                          editorRef.current = editor
+                          // 确保编辑器初始化后设置内容
+                          if (pdfEditorContent) {
+                            editor.setContent(pdfEditorContent)
+                          }
+                        }}
                         value={pdfEditorContent}
                         onEditorChange={(content) => {
+                          // 保持原有格式，不进行额外的格式化处理
                           setPdfEditorContent(content)
                           // 不再修改左侧文本区域的content，保持数据独立
                         }}
@@ -925,7 +1026,7 @@ export default function EditorPage() {
                             'bold italic forecolor | alignleft aligncenter ' +
                             'alignright alignjustify | bullist numlist outdent indent | ' +
                             'removeformat | help | pagebreak | emoticons',
-                          content_style: 'body { font-family:Helvetica,Arial,sans-serif; font-size:14px; word-wrap: break-word; overflow-wrap: break-word; overflow-y: auto; }',
+                          content_style: 'body { font-family:Helvetica,Arial,sans-serif; font-size:14px; word-wrap: break-word; overflow-wrap: break-word; overflow-y: auto; width: 100%; max-width: 100%; padding: 20px; box-sizing: border-box; text-align: left; line-height: 1.6; margin: 0; white-space: pre-wrap; } .pdf-container { width: 100%; max-width: 100%; margin: 0; padding: 0; } .pdf-page { width: 100%; padding: 20px; margin: 0; background: white; } .pdf-text-item { display: inline; word-wrap: break-word; white-space: pre-wrap; } .pdf-paragraph { margin: 0 0 12px 0; white-space: pre-wrap; line-height: 1.6; } p { margin: 0 0 12px 0; white-space: pre-wrap; } br { display: block; margin: 0; line-height: 1.2; }',
                           branding: false,
                           resize: false,
                           statusbar: true,
@@ -935,7 +1036,30 @@ export default function EditorPage() {
                           file_picker_types: 'image',
                           content_css: false,
                           skin: 'oxide',
-                          theme: 'silver'
+                          theme: 'silver',
+                          forced_root_block: 'p',
+                          force_br_newlines: false,
+                          force_p_newlines: true,
+                          convert_newlines_to_brs: false,
+                          remove_linebreaks: false,
+                          keep_styles: true,
+                          verify_html: false,
+                          cleanup: false,
+                          convert_urls: false,
+                          relative_urls: false,
+                          remove_script_host: false,
+                          entity_encoding: 'raw',
+                          setup: (editor) => {
+                            editor.on('init', () => {
+                              if (pdfEditorContent && pdfEditorContent.trim()) {
+                                editor.setContent(pdfEditorContent)
+                              }
+                            })
+                            
+                            editor.on('BeforeSetContent', (e) => {
+                              e.content = e.content
+                            })
+                          }
                         }}
                       />
                     </div>

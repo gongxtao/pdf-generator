@@ -66,6 +66,12 @@ function generateHTML(data: PDFGenerationRequest): string {
         margin: 40px;
         color: #333;
         font-size: 14px;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+      }
+      .content {
+        max-width: 800px;
+        margin: 0 auto;
       }
       h1 {
         color: #2c3e50;
@@ -81,6 +87,13 @@ function generateHTML(data: PDFGenerationRequest): string {
       p {
         margin-bottom: 15px;
         text-align: justify;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+      }
+      br {
+        display: block;
+        margin: 0;
+        line-height: 1.2;
       }
       ul, ol {
         margin-bottom: 15px;
@@ -88,6 +101,24 @@ function generateHTML(data: PDFGenerationRequest): string {
       }
       li {
         margin-bottom: 8px;
+      }
+      /* 保持TinyMCE编辑器的样式 */
+      .pdf-container {
+        width: 100%;
+        max-width: 100%;
+        margin: 0;
+        padding: 0;
+      }
+      .pdf-page {
+        width: 100%;
+        padding: 20px;
+        margin: 0;
+        background: white;
+      }
+      .pdf-text-item {
+        display: inline;
+        word-wrap: break-word;
+        white-space: pre-wrap;
       }
     `;
 
@@ -131,17 +162,17 @@ function generateHTML(data: PDFGenerationRequest): string {
     <body>
       <h1>${title}</h1>
       <div class="content">
-        ${content.split('\n').map(paragraph => {
-          if (paragraph.trim().startsWith('# ')) {
-            return `<h2>${paragraph.replace('# ', '')}</h2>`;
-          } else if (paragraph.trim().startsWith('- ')) {
-            return `<li>${paragraph.replace('- ', '')}</li>`;
-          } else if (paragraph.trim()) {
-            return `<p>${paragraph}</p>`;
-          }
-          return '';
-        }).join('')}
-      </div>
+         ${content.includes('<') && content.includes('>') ? content : content.split('\n').map(paragraph => {
+           if (paragraph.trim().startsWith('# ')) {
+             return `<h2>${paragraph.replace('# ', '')}</h2>`;
+           } else if (paragraph.trim().startsWith('- ')) {
+             return `<li>${paragraph.replace('- ', '')}</li>`;
+           } else if (paragraph.trim()) {
+             return `<p>${paragraph}</p>`;
+           }
+           return '';
+         }).join('')}
+        </div>
     </body>
     </html>
   `;
