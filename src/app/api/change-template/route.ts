@@ -144,7 +144,7 @@ async function generatePDFWithNewTemplate(data: ChangeTemplateRequest): Promise<
     // 添加模板信息
     pdf.setFontSize(10)
     pdf.setTextColor(styles.accentColor[0], styles.accentColor[1], styles.accentColor[2])
-    pdf.text(`模板: ${data.newTemplate.name} (${data.newTemplate.category})`, 20, 40)
+    pdf.text(`模板: ${data.newTemplate.title} (${data.newTemplate.category})`, 20, 40)
     
     // 添加更换时间标记
     pdf.setFontSize(8)
@@ -203,7 +203,7 @@ async function generatePDFWithNewTemplate(data: ChangeTemplateRequest): Promise<
       pdf.setFontSize(8)
       pdf.setTextColor(150, 150, 150)
       pdf.text(`第 ${i} 页，共 ${pageCount} 页`, 20, 290)
-      pdf.text(`${data.newTemplate.name} 模板`, 100, 290)
+      pdf.text(`${data.newTemplate.title} 模板`, 100, 290)
       pdf.text(`更换时间: ${new Date().toLocaleString()}`, 150, 290)
     }
     
@@ -232,7 +232,7 @@ async function saveTemplateChangedPDF(pdfBuffer: Buffer, filename: string, templ
     // 3. 可能需要删除或归档旧版本
     
     console.log('模板更换PDF已保存:', {
-      template: template.name,
+      template: template.title,
       category: template.category,
       size: pdfBuffer.length,
       url: pdfUrl
@@ -269,7 +269,7 @@ export async function POST(request: NextRequest) {
       title: data.title,
       contentLength: data.content?.length || 0,
       oldPdf: data.originalPdfUrl,
-      newTemplate: data.newTemplate.name,
+      newTemplate: data.newTemplate.title,
       category: data.newTemplate.category
     })
     
@@ -284,16 +284,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       pdfUrl,
-      message: `模板已更换为 ${data.newTemplate.name}`,
+      message: `模板已更换为 ${data.newTemplate.title}`,
       templateChange: {
         from: data.originalPdfUrl ? '原模板' : '无模板',
-        to: data.newTemplate.name,
+        to: data.newTemplate.title,
         category: data.newTemplate.category,
         changedAt: new Date().toISOString()
       },
       metadata: {
         title: data.title,
-        template: data.newTemplate.name,
+        template: data.newTemplate.title,
         templateCategory: data.newTemplate.category,
         size: pdfBuffer.length,
         pages: 1, // 简化处理

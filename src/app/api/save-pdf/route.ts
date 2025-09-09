@@ -71,7 +71,7 @@ const createPDFDocument = (data: SavePDFRequest) => {
   return React.createElement(Document, {},
     React.createElement(Page, { size: 'A4', style: styles.page },
       React.createElement(Text, { style: styles.title }, data.title || '未命名文档'),
-      data.template && React.createElement(Text, { style: styles.templateInfo }, `模板: ${data.template.name}`),
+      data.template && React.createElement(Text, { style: styles.templateInfo }, `模板: ${data.template.title}`),
       React.createElement(Text, { style: styles.updateTime }, `最后更新: ${new Date().toLocaleString()}`),
       React.createElement(Text, { style: styles.content }, cleanContent),
       React.createElement(Text, {

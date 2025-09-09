@@ -377,14 +377,15 @@ const mockTemplates: LocalTemplate[] = [
   }
 ]
 
+// 从模板数据中动态获取分类
+const uniqueCategories = Array.from(new Set(mockTemplates.map(t => t.category)))
 const categories = [
   { id: 'all', name: '全部模板', count: mockTemplates.length },
-  { id: 'business', name: '商务', count: mockTemplates.filter(t => t.category === 'business').length },
-  { id: 'academic', name: '学术', count: mockTemplates.filter(t => t.category === 'academic').length },
-  { id: 'resume', name: '简历', count: mockTemplates.filter(t => t.category === 'resume').length },
-  { id: 'creative', name: '创意', count: mockTemplates.filter(t => t.category === 'creative').length },
-  { id: 'technical', name: '技术', count: mockTemplates.filter(t => t.category === 'technical').length },
-  { id: 'marketing', name: '营销', count: mockTemplates.filter(t => t.category === 'marketing').length }
+  ...uniqueCategories.map(category => ({
+    id: category,
+    name: category,
+    count: mockTemplates.filter(t => t.category === category).length
+  }))
 ]
 
 export default function TemplateSelector({ onTemplateSelect, selectedTemplate, className = '' }: TemplateSelectorProps) {
@@ -427,7 +428,7 @@ export default function TemplateSelector({ onTemplateSelect, selectedTemplate, c
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase()
       filtered = filtered.filter(template => 
-        template.name.toLowerCase().includes(query) ||
+        template.title.toLowerCase().includes(query) ||
         template.description.toLowerCase().includes(query)
       )
     }
@@ -532,7 +533,7 @@ export default function TemplateSelector({ onTemplateSelect, selectedTemplate, c
 
               {/* 模板信息 */}
               <div className="p-4">
-                <h3 className="text-lg font-medium text-gray-900 mb-2">{template.name}</h3>
+                <h3 className="text-lg font-medium text-gray-900 mb-2">{template.title}</h3>
                 <p className="text-sm text-gray-600 mb-3">{template.description}</p>
                 
                 <div className="flex justify-between items-center">
@@ -568,7 +569,7 @@ export default function TemplateSelector({ onTemplateSelect, selectedTemplate, c
           <div className="bg-white rounded-lg max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
             <div className="p-6">
               <div className="flex justify-between items-center mb-4">
-                <h3 className="text-lg font-medium text-gray-900">模板预览: {previewTemplate.name}</h3>
+                <h3 className="text-lg font-medium text-gray-900">模板预览: {previewTemplate.title}</h3>
                 <button
                   onClick={() => setPreviewTemplate(null)}
                   className="text-gray-400 hover:text-gray-600"
@@ -586,7 +587,7 @@ export default function TemplateSelector({ onTemplateSelect, selectedTemplate, c
                   <p className="text-gray-600 mb-4">{previewTemplate.description}</p>
                   <div className="space-y-2">
                     <h2 className="text-lg font-semibold">章节标题</h2>
-                    <p>这是使用 {previewTemplate.name} 的示例内容。您可以看到这个模板的基本样式和布局。</p>
+                    <p>这是使用 {previewTemplate.title} 的示例内容。您可以看到这个模板的基本样式和布局。</p>
                     <ul className="list-disc list-inside space-y-1">
                       <li>列表项目 1</li>
                       <li>列表项目 2</li>

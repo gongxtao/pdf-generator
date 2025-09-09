@@ -102,7 +102,7 @@ function generateHTML(data: PDFGenerationRequest): string {
       li {
         margin-bottom: 8px;
       }
-      /* 保持TinyMCE编辑器的样式 */
+      /* 保持Tiptap编辑器的样式 */
       .pdf-container {
         width: 100%;
         max-width: 100%;
@@ -120,6 +120,52 @@ function generateHTML(data: PDFGenerationRequest): string {
         word-wrap: break-word;
         white-space: pre-wrap;
       }
+      /* Tiptap编辑器特定样式 */
+      strong, b {
+        font-weight: bold;
+      }
+      em, i {
+        font-style: italic;
+      }
+      u {
+        text-decoration: underline;
+      }
+      s, strike {
+        text-decoration: line-through;
+      }
+      mark {
+        background-color: #ffff00;
+        padding: 0 2px;
+      }
+      blockquote {
+        border-left: 4px solid #ddd;
+        margin: 16px 0;
+        padding-left: 16px;
+        font-style: italic;
+        color: #666;
+      }
+      code {
+        background-color: #f5f5f5;
+        padding: 2px 4px;
+        border-radius: 3px;
+        font-family: 'Courier New', monospace;
+        font-size: 0.9em;
+      }
+      pre {
+        background-color: #f5f5f5;
+        padding: 12px;
+        border-radius: 6px;
+        overflow-x: auto;
+        margin: 16px 0;
+      }
+      pre code {
+        background: none;
+        padding: 0;
+      }
+      .text-align-left { text-align: left; }
+      .text-align-center { text-align: center; }
+      .text-align-right { text-align: right; }
+      .text-align-justify { text-align: justify; }
     `;
 
     switch (template) {

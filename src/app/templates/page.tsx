@@ -11,8 +11,8 @@ const TemplatesPage: React.FC = () => {
 
   // 处理模板选择
   const handleTemplateSelect = (template: Template) => {
-    // 跳转到生成页面，并传递模板信息
-    window.location.href = `/generate?template=${encodeURIComponent(JSON.stringify(template))}`
+    // 跳转到editorview页面，并传递模板信息
+    window.location.href = `/editorview?templateId=${template.id}&category=${template.category}`
   }
 
   // 获取模板数据
@@ -24,17 +24,14 @@ const TemplatesPage: React.FC = () => {
     { name: '历史记录', icon: '📋', href: '/history' }
   ]
 
-  // 模板分类数据
-  const categories = [
-    'All', 'Design', 'Document', 'Business', 'Marketing', 'Education', 
-    'Legal', 'Finance', 'HR', 'Personal', 'Forms', 'Presentations'
-  ]
+  // 从模板数据中动态获取分类
+  const categories = ['All', ...Array.from(new Set(templates.map(template => template.category)))]
 
   // 过滤模板
   const filteredTemplates = templates.filter(template => {
-    const matchesSearch = template.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         template.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                         template.tags.some(tag => tag.toLowerCase().includes(searchQuery.toLowerCase()))
+    const matchesSearch = template.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      template.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      template.category.toLowerCase().includes(searchQuery.toLowerCase())
     const matchesCategory = selectedCategory === 'All' || template.category === selectedCategory
     return matchesSearch && matchesCategory
   })
@@ -176,7 +173,7 @@ const TemplatesPage: React.FC = () => {
                 {/* 模板信息 */}
                 <div className="p-3">
                   <h3 className="text-sm font-medium text-gray-900 mb-1 line-clamp-1">
-                    {template.name}
+                    {template.title}
                   </h3>
                   <p className="text-xs text-gray-500 line-clamp-2">
                     {template.description}

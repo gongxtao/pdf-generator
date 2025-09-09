@@ -1,24 +1,24 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { DocumentData } from '@/app/generate/page'
+
 
 // 动态导入PDF.js以避免服务端渲染问题
 let pdfjsLib: any = null
 if (typeof window !== 'undefined') {
   import('pdfjs-dist').then((pdfjs) => {
     pdfjsLib = pdfjs
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
+    // 使用本地的PDF.js worker文件，避免CDN访问问题
+    pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js'
   })
 }
 
 interface PDFPreviewProps {
   pdfUrl?: string | null
-  documentData?: DocumentData
   className?: string
 }
 
-export default function PDFPreview({ pdfUrl, documentData, className = '' }: PDFPreviewProps) {
+export default function PDFPreview({ pdfUrl, className = '' }: PDFPreviewProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [previewMode, setPreviewMode] = useState<'iframe' | 'canvas'>('canvas')
@@ -165,91 +165,16 @@ export default function PDFPreview({ pdfUrl, documentData, className = '' }: PDF
     setPageNum(prev => Math.min(prev + 1, numPages))
   }
 
-  // 如果没有PDF URL，显示实时预览
-  if (!pdfUrl && documentData) {
+  // 如果没有PDF URL，显示提示信息
+  if (!pdfUrl) {
     return (
-      <div className={`h-full flex flex-col ${className}`}>
-        {/* 预览工具栏 */}
-        <div className="flex justify-between items-center p-2 border-b border-gray-200 bg-gray-50">
-          <div className="flex items-center space-x-2">
-            <span className="text-sm text-gray-600">实时预览</span>
-            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-          </div>
-          
-          <div className="flex items-center space-x-2">
-            <button
-              onClick={handleZoomOut}
-              className="p-1 text-gray-600 hover:text-gray-800"
-              title="缩小"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
-              </svg>
-            </button>
-            
-            <span className="text-sm text-gray-600 min-w-[60px] text-center">
-              {Math.round(scale * 100)}%
-            </span>
-            
-            <button
-              onClick={handleZoomIn}
-              className="p-1 text-gray-600 hover:text-gray-800"
-              title="放大"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
-            </button>
-            
-            <button
-              onClick={handleResetZoom}
-              className="px-2 py-1 text-xs text-gray-600 hover:text-gray-800 border border-gray-300 rounded"
-              title="重置缩放"
-            >
-              重置
-            </button>
-          </div>
-        </div>
-
-        {/* 实时预览内容 */}
-        <div className="flex-1 overflow-auto bg-gray-100 p-4">
-          <div 
-            className="bg-white shadow-lg mx-auto" 
-            style={{ 
-              transform: `scale(${scale})`,
-              transformOrigin: 'top center',
-              width: '210mm', // A4宽度
-              minHeight: '297mm', // A4高度
-              padding: '20mm'
-            }}
-          >
-            {/* 模拟PDF页面内容 */}
-            <div className="prose max-w-none">
-              <h1 className="text-2xl font-bold mb-4 text-gray-900">
-                {documentData.title || '未命名文档'}
-              </h1>
-              
-              {documentData.template && (
-                <div className="mb-4 p-2 bg-blue-50 border-l-4 border-blue-400">
-                  <p className="text-sm text-blue-700">
-                    使用模板: {documentData.template.name}
-                  </p>
-                </div>
-              )}
-              
-              <div 
-                className="text-gray-800 leading-relaxed"
-                dangerouslySetInnerHTML={{ 
-                  __html: documentData.content || '<p class="text-gray-500">开始编辑内容...</p>' 
-                }}
-              />
-              
-              {/* 页脚 */}
-              <div className="mt-8 pt-4 border-t border-gray-200 text-center text-sm text-gray-500">
-                生成时间: {new Date().toLocaleString()}
-              </div>
-            </div>
-          </div>
+      <div className={`h-full flex items-center justify-center ${className}`}>
+        <div className="text-center text-gray-500">
+          <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          <p className="text-lg font-medium mb-2">暂无PDF预览</p>
+          <p className="text-sm">请先生成PDF文档</p>
         </div>
       </div>
     )

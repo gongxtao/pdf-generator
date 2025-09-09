@@ -54,7 +54,7 @@ export default function EditorPage() {
       return allTemplates
     }
     return allTemplates.filter(template => 
-      template.name.toLowerCase().includes(templateSearchQuery.toLowerCase()) ||
+      template.title.toLowerCase().includes(templateSearchQuery.toLowerCase()) ||
       template.category.toLowerCase().includes(templateSearchQuery.toLowerCase()) ||
       template.description.toLowerCase().includes(templateSearchQuery.toLowerCase())
     )
@@ -658,7 +658,7 @@ export default function EditorPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          title: selectedTemplate.name,
+          title: selectedTemplate.title,
           content: isEditMode ? pdfEditorContent.replace(/<[^>]*>/g, '') : content, // 编辑模式使用PDF编辑器内容，否则使用左侧文本内容
           template: 'business', // 使用默认模板类型
           template_content: selectedTemplate.template_content,
@@ -734,7 +734,7 @@ export default function EditorPage() {
         
         const link = document.createElement('a')
         link.href = url
-        link.download = `${selectedTemplate.name}_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.pdf`
+        link.download = `${selectedTemplate.title}_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.pdf`
         document.body.appendChild(link)
         link.click()
         document.body.removeChild(link)
@@ -745,7 +745,7 @@ export default function EditorPage() {
         // 如果是普通URL，直接下载
         const link = document.createElement('a')
         link.href = generatedPdfUrl
-        link.download = `${selectedTemplate.name}_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.pdf`
+        link.download = `${selectedTemplate.title}_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.pdf`
         document.body.appendChild(link)
         link.click()
         document.body.removeChild(link)
@@ -788,7 +788,7 @@ export default function EditorPage() {
           <div className="flex items-center justify-between">
             <h1 className="text-xl font-semibold text-gray-900">PDF编辑器</h1>
             <div className="text-sm text-gray-600">
-              {selectedTemplate ? `当前模板：${selectedTemplate.name}` : '未选择模板'}
+              {selectedTemplate ? `当前模板：${selectedTemplate.title}` : '未选择模板'}
             </div>
           </div>
         </nav>
@@ -853,7 +853,7 @@ export default function EditorPage() {
                   }}
                 >
                   <div className="aspect-[3/4] bg-gray-100 rounded mb-2 flex items-center justify-center">
-                    <span className="text-xs text-gray-500 text-center px-1 leading-tight">{template.name}</span>
+                    <span className="text-xs text-gray-500 text-center px-1 leading-tight">{template.title}</span>
                   </div>
                   <p className="text-xs text-center text-gray-600 truncate">{template.category}</p>
                 </div>
