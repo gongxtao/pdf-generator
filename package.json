@@ -41,6 +41,7 @@
     "react-dom": "19.1.0",
     "react-hotkeys-hook": "^5.1.0",
     "react-pdf": "^10.1.0",
+    "replicate": "^1.1.0",
     "tinymce": "^8.0.2"
   },
   "devDependencies": {

@@ -1,3 +1,4 @@
+import { generateHtmlAction } from '@/lib/generate-html';
 import { NextRequest, NextResponse } from 'next/server';
 import puppeteer from 'puppeteer';
 
@@ -5,8 +6,8 @@ import puppeteer from 'puppeteer';
 interface PDFGenerationRequest {
   title: string;
   content: string;
-  template?: 'business' | 'academic' | 'creative';
-  template_content?: string; // 模板的CSS样式代码
+  template: string;
+  template_content: string; // 模板的CSS样式代码
   language?: string;
 }
 
@@ -308,10 +309,21 @@ export async function POST(request: NextRequest): Promise<NextResponse<PDFGenera
     }
 
     // 生成HTML内容
-    const html = generateHTML(data);
+    // const html = generateHTML(data);
+    const htmlOutput = await generateHtmlAction({
+      css: data.template_content,
+      input: data.content,
+      extra: []
+    })
+    if (!htmlOutput.success) {
+      return NextResponse.json({
+        success: false,
+        error: htmlOutput.error
+      }, { status: 400 });
+    }
     
     // 使用Puppeteer生成PDF
-    const pdfBuffer = await generatePDFWithPuppeteer(html);
+    const pdfBuffer = await generatePDFWithPuppeteer(htmlOutput.content || '');
     
     // 将PDF转换为base64
     const base64PDF = pdfBuffer.toString('base64');
