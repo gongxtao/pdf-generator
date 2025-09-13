@@ -4,10 +4,11 @@ import { useState, useEffect, useRef } from 'react'
 
 
 // 动态导入PDF.js以避免服务端渲染问题
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let pdfjsLib: any = null
 if (typeof window !== 'undefined') {
   import('pdfjs-dist').then((pdfjs) => {
-    pdfjsLib = pdfjs
+    pdfjsLib = pdfjs.default || pdfjs
     // 使用本地的PDF.js worker文件，避免CDN访问问题
     pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js'
   })
@@ -116,8 +117,9 @@ export default function PDFPreview({ pdfUrl, className = '' }: PDFPreviewProps) 
       renderTaskRef.current = page.render(renderContext)
       await renderTaskRef.current.promise
       renderTaskRef.current = null
-    } catch (err: any) {
-      if (err.name !== 'RenderingCancelledException') {
+    } catch (err: unknown) {
+      const error = err as Error
+      if (error.name !== 'RenderingCancelledException') {
         console.error('页面渲染失败:', err)
         setError('页面渲染失败')
       }

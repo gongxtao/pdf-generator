@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { Template, getAllTemplates } from '@/data/templates'
 
-export default function Home() {
+function Home() {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('All')
   const router = useRouter()
@@ -185,3 +185,7 @@ export default function Home() {
     </div>
   )
 }
+
+Home.displayName = 'Home'
+
+export default Home

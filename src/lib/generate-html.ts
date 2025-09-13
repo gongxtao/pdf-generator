@@ -94,7 +94,7 @@ export async function generateHtmlAction(
       max_tokens: 16384
     };
 
-    console.log('Input: ', input);
+    // console.log('Input: ', input);
     // 使用predictions.create方法调用Replicate API，避免超时问题
     const prediction = await replicate.predictions.create({
       version: "deepseek-ai/deepseek-v3.1",
@@ -102,7 +102,6 @@ export async function generateHtmlAction(
     });
 
     // 轮询预测结果直到完成
-    let output;
     let currentPrediction = prediction;
     while (currentPrediction.status !== "succeeded" && currentPrediction.status !== "failed") {
       // 等待1秒后再次检查状态
@@ -114,7 +113,7 @@ export async function generateHtmlAction(
       throw new Error(`预测失败: ${currentPrediction.error}`);
     }
 
-    output = currentPrediction.output;
+    const output = currentPrediction.output;
 
     // 解析返回结果
     let rawOutput = '';
@@ -126,7 +125,7 @@ export async function generateHtmlAction(
       console.error('Unexpected output format from Replicate:', output);
       return { success: false, error: 'Unexpected output format from Replicate' };
     }
-    console.log('Returns the result: ', rawOutput);
+    // console.log('Returns the result: ', rawOutput);
     // 解析HTML内容
     const htmlContent = parseHtmlContent(rawOutput);
     return {

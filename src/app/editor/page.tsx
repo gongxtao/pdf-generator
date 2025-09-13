@@ -8,8 +8,7 @@ import { useToast } from '@/components/ToastManager'
 import { Upload, Download, FileText, Settings, Palette, History, Edit3, Save, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react'
 import * as pdfjsLib from 'pdfjs-dist'
 import mammoth from 'mammoth'
-import dynamic from 'next/dynamic'
-import { Template, getAllTemplates, getTemplateById } from '@/data/templates'
+import { Template, getAllTemplates } from '@/data/templates'
 
 // 导入TinyMCE
 import { Editor } from '@tinymce/tinymce-react'
@@ -43,6 +42,7 @@ export default function EditorPage() {
   // PDF编辑器独立状态 - 与左侧文本编辑区域完全分离
   const [pdfEditorContent, setPdfEditorContent] = useState('') // PDF编辑器的独立内容
   const [originalPdfContent, setOriginalPdfContent] = useState('') // 保存PDF的原始内容
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const editorRef = useRef<any>(null)
 
   // 获取所有模板
@@ -179,7 +179,12 @@ export default function EditorPage() {
           page.getOperatorList()
         ])
         
-        const textItems = textContent.items as any[]
+        const textItems = textContent.items as Array<{
+          str: string;
+          transform: number[];
+          fontName: string;
+          [key: string]: unknown;
+        }>
         
         // 构建颜色映射表
         const colorMap = new Map<number, string>()
@@ -223,7 +228,7 @@ export default function EditorPage() {
         htmlContent += `<div class="pdf-page" data-page="${pageNum}"><p class="pdf-paragraph">`
         
         // 按Y坐标排序文本项并分组为行
-        const sortedItems = textItems.sort((a: any, b: any) => {
+        const sortedItems = textItems.sort((a, b) => {
           const yDiff = Math.abs(a.transform[5] - b.transform[5])
           if (yDiff < 3) {
             return a.transform[4] - b.transform[4] // 同一行按x坐标排序
@@ -232,8 +237,8 @@ export default function EditorPage() {
         })
         
         // 将文本项分组为行
-        const textLines: any[][] = []
-        let currentLine: any[] = []
+        const textLines: typeof textItems[] = []
+        let currentLine: typeof textItems = []
         let lastY = -1
         
         for (const item of sortedItems) {
@@ -976,7 +981,7 @@ export default function EditorPage() {
                 <div className="h-full flex flex-col">
                   {/* 编辑模式头部 */}
                   <div className="bg-blue-600 text-white px-6 py-3 flex items-center justify-between">
-                    <h2 className="text-lg font-semibold">编辑模式 - {selectedTemplate?.name}</h2>
+                    <h2 className="text-lg font-semibold">编辑模式 - {selectedTemplate?.title}</h2>
                     <div className="flex items-center space-x-3">
                       <button
                         onClick={async () => {

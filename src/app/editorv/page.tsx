@@ -8,8 +8,7 @@ import { useToast } from '@/components/ToastManager'
 import { Upload, Download, FileText, Settings, Palette, History, Edit3, Save, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react'
 import * as pdfjsLib from 'pdfjs-dist'
 import mammoth from 'mammoth'
-import dynamic from 'next/dynamic'
-import { Template, getAllTemplates, getTemplateById } from '@/data/templates'
+import { Template, getAllTemplates } from '@/data/templates'
 
 // 导入Tiptap编辑器
 import { ControlledSimpleEditor } from '@/components/ControlledSimpleEditor'
@@ -53,7 +52,7 @@ export default function EditorPage() {
       return allTemplates
     }
     return allTemplates.filter(template => 
-      template.name.toLowerCase().includes(templateSearchQuery.toLowerCase()) ||
+      template.title.toLowerCase().includes(templateSearchQuery.toLowerCase()) ||
       template.category.toLowerCase().includes(templateSearchQuery.toLowerCase()) ||
       template.description.toLowerCase().includes(templateSearchQuery.toLowerCase())
     )
@@ -175,7 +174,12 @@ export default function EditorPage() {
           page.getOperatorList()
         ])
         
-        const textItems = textContent.items as any[]
+        const textItems = textContent.items as Array<{
+          str: string;
+          transform: number[];
+          fontName: string;
+          [key: string]: unknown;
+        }>
         
         // 构建颜色映射表
         const colorMap = new Map<number, string>()
@@ -219,7 +223,7 @@ export default function EditorPage() {
         htmlContent += `<div class="pdf-page" data-page="${pageNum}"><p class="pdf-paragraph">`
         
         // 按Y坐标排序文本项并分组为行
-        const sortedItems = textItems.sort((a: any, b: any) => {
+        const sortedItems = textItems.sort((a, b) => {
           const yDiff = Math.abs(a.transform[5] - b.transform[5])
           if (yDiff < 3) {
             return a.transform[4] - b.transform[4] // 同一行按x坐标排序
@@ -228,8 +232,8 @@ export default function EditorPage() {
         })
         
         // 将文本项分组为行
-        const textLines: any[][] = []
-        let currentLine: any[] = []
+        const textLines: typeof textItems[] = []
+        let currentLine: typeof textItems = []
         let lastY = -1
         
         for (const item of sortedItems) {
@@ -655,7 +659,7 @@ export default function EditorPage() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          title: selectedTemplate.name,
+          title: selectedTemplate.title,
           content: isEditMode ? pdfEditorContent.replace(/<[^>]*>/g, '') : content, // 编辑模式使用PDF编辑器内容，否则使用左侧文本内容
           template: 'business', // 使用默认模板类型
           template_content: selectedTemplate.template_content,
@@ -731,7 +735,7 @@ export default function EditorPage() {
         
         const link = document.createElement('a')
         link.href = url
-        link.download = `${selectedTemplate.name}_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.pdf`
+        link.download = `${selectedTemplate.title}_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.pdf`
         document.body.appendChild(link)
         link.click()
         document.body.removeChild(link)
@@ -742,7 +746,7 @@ export default function EditorPage() {
         // 如果是普通URL，直接下载
         const link = document.createElement('a')
         link.href = generatedPdfUrl
-        link.download = `${selectedTemplate.name}_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.pdf`
+        link.download = `${selectedTemplate.title}_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.pdf`
         document.body.appendChild(link)
         link.click()
         document.body.removeChild(link)
@@ -785,7 +789,7 @@ export default function EditorPage() {
           <div className="flex items-center justify-between">
             <h1 className="text-xl font-semibold text-gray-900">PDF编辑器</h1>
             <div className="text-sm text-gray-600">
-              {selectedTemplate ? `当前模板：${selectedTemplate.name}` : '未选择模板'}
+              {selectedTemplate ? `当前模板：${selectedTemplate.title}` : '未选择模板'}
             </div>
           </div>
         </nav>
@@ -850,7 +854,7 @@ export default function EditorPage() {
                   }}
                 >
                   <div className="aspect-[3/4] bg-gray-100 rounded mb-2 flex items-center justify-center">
-                    <span className="text-xs text-gray-500 text-center px-1 leading-tight">{template.name}</span>
+                    <span className="text-xs text-gray-500 text-center px-1 leading-tight">{template.title}</span>
                   </div>
                   <p className="text-xs text-center text-gray-600 truncate">{template.category}</p>
                 </div>
@@ -970,7 +974,7 @@ export default function EditorPage() {
                 <div className="h-full flex flex-col">
                   {/* 编辑模式头部 */}
                   <div className="bg-blue-600 text-white px-6 py-3 flex items-center justify-between">
-                    <h2 className="text-lg font-semibold">编辑模式 - {selectedTemplate?.name}</h2>
+                    <h2 className="text-lg font-semibold">编辑模式 - {selectedTemplate?.title}</h2>
                     <div className="flex items-center space-x-3">
                       <button
                         onClick={async () => {

@@ -8,27 +8,31 @@ import { useToast } from '@/components/ToastManager'
 import { Upload, Download, FileText, Settings, Palette, History, Edit3, Save, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react'
 import * as pdfjsLib from 'pdfjs-dist'
 import mammoth from 'mammoth'
-import dynamic from 'next/dynamic'
-import { Template, getAllTemplates, getTemplateById } from '@/data/templates'
+import { Template, getAllTemplates } from '@/data/templates'
+import Sidebar from '@/components/Sidebar'
 
 // 导入PDF预览组件
 import PDFPreview from '@/components/PDFPreview'
 
 // 动态导入PDF.js worker
 let pdfjsWorkerLoaded = false
-if (typeof window !== 'undefined' && !pdfjsWorkerLoaded) {
-  pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
-    'pdfjs-dist/build/pdf.worker.min.mjs',
-    import.meta.url
-  ).toString()
-  pdfjsWorkerLoaded = true
-}
 
 // 使用共享的模板数据和接口
 
 export default function EditorPage() {
   const searchParams = useSearchParams()
   const { showSuccess, showError, showWarning, showInfo } = useToast()
+  
+  // 初始化PDF.js worker
+  useEffect(() => {
+    if (!pdfjsWorkerLoaded) {
+      pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
+        'pdfjs-dist/build/pdf.worker.min.mjs',
+        import.meta.url
+      ).toString()
+      pdfjsWorkerLoaded = true
+    }
+  }, [])
   
   // 状态变量
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null)
@@ -101,420 +105,67 @@ export default function EditorPage() {
     })
   }
 
-  // 读取PDF文件 - 增强版本，生成完整的HTML和CSS结构
+  // 读取PDF文件 - 提取纯文本内容
   const readPdfFile = async (file: File): Promise<string> => {
     try {
       const arrayBuffer = await file.arrayBuffer()
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise
       
-      // 生成完整的HTML结构，包含CSS样式
-       let htmlContent = `
-          <style>
-            .pdf-container {
-              width: 100%;
-              max-width: 100%;
-              margin: 0;
-              font-family: Arial, sans-serif;
-              background: transparent;
-              padding: 0;
-              box-sizing: border-box;
-              overflow-wrap: break-word;
-              word-wrap: break-word;
-            }
-            .pdf-page {
-              width: 100%;
-              margin: 0;
-              background: transparent;
-              position: relative;
-              padding: 0;
-              box-sizing: border-box;
-              overflow: visible;
-            }
-          .pdf-text-item {
-            display: inline;
-            line-height: 1.6;
-            word-wrap: break-word;
-            overflow-wrap: break-word;
-          }
-          .pdf-paragraph {
-            margin: 0 0 1em 0;
-            line-height: 1.6;
-            word-wrap: break-word;
-          }
-          .pdf-title {
-            font-weight: bold;
-            margin: 1.2em 0 0.8em 0;
-            word-wrap: break-word;
-          }
-          .pdf-heading-1 {
-            font-size: 1.5em;
-            font-weight: bold;
-            margin: 1.2em 0 0.8em 0;
-            word-wrap: break-word;
-            color: #333;
-          }
-          .pdf-heading-2 {
-            font-size: 1.25em;
-            font-weight: bold;
-            margin: 1.1em 0 0.7em 0;
-            color: #444;
-            word-wrap: break-word;
-          }
-          .pdf-heading-3 {
-            font-size: 1.1em;
-            font-weight: bold;
-            margin: 1em 0 0.6em 0;
-            color: #555;
-            word-wrap: break-word;
-          }
-        </style>
-        <div class="pdf-container">`
-
+      let textContent = ''
+      
+      // 遍历每一页
       for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
         const page = await pdf.getPage(pageNum)
-        const viewport = page.getViewport({ scale: 1.5 }) // 提高分辨率
+        const content = await page.getTextContent()
         
-        // 获取文本内容和操作指令
-        const [textContent, operatorList] = await Promise.all([
-          page.getTextContent(),
-          page.getOperatorList()
-        ])
+        // 提取文本项
+        const textItems = content.items as Array<{
+          str: string;
+          transform: number[];
+        }>
         
-        const textItems = textContent.items as any[]
-        
-        // 构建颜色映射表
-        const colorMap = new Map<number, string>()
-        let currentColor = '#000000'
-        
-        // 解析操作指令以提取颜色信息
-        for (let j = 0; j < operatorList.fnArray.length; j++) {
-          const fn = operatorList.fnArray[j]
-          const args = operatorList.argsArray[j]
-          
-          // 检测颜色设置指令
-          if (fn === 25 || fn === 26) { // setFillRGBColor, setStrokeRGBColor
-            if (args && args.length >= 3) {
-              const r = Math.round(args[0] * 255)
-              const g = Math.round(args[1] * 255)
-              const b = Math.round(args[2] * 255)
-              currentColor = `rgb(${r}, ${g}, ${b})`
-            }
-          } else if (fn === 23 || fn === 24) { // setFillGray, setStrokeGray
-            if (args && args.length >= 1) {
-              const gray = Math.round(args[0] * 255)
-              currentColor = `rgb(${gray}, ${gray}, ${gray})`
-            }
-          } else if (fn === 27 || fn === 28) { // setFillCMYKColor, setStrokeCMYKColor
-            if (args && args.length >= 4) {
-              const c = args[0]
-              const m = args[1]
-              const y = args[2]
-              const k = args[3]
-              const r = Math.round(255 * (1 - c) * (1 - k))
-              const g = Math.round(255 * (1 - m) * (1 - k))
-              const b = Math.round(255 * (1 - y) * (1 - k))
-              currentColor = `rgb(${r}, ${g}, ${b})`
-            }
-          }
-          
-          colorMap.set(j, currentColor)
-        }
-
-        // 开始页面容器和第一个段落
-        htmlContent += `<div class="pdf-page" data-page="${pageNum}"><p class="pdf-paragraph">`
-        
-        // 按Y坐标排序文本项并分组为行
-        const sortedItems = textItems.sort((a: any, b: any) => {
+        // 按Y坐标排序文本项（从上到下）
+        const sortedItems = textItems.sort((a, b) => {
           const yDiff = Math.abs(a.transform[5] - b.transform[5])
           if (yDiff < 3) {
-            return a.transform[4] - b.transform[4] // 同一行按x坐标排序
+            return a.transform[4] - b.transform[4] // 同一行按X坐标排序
           }
-          return b.transform[5] - a.transform[5] // 按y坐标排序（从上到下）
+          return b.transform[5] - a.transform[5] // 按Y坐标排序（从上到下）
         })
         
-        // 将文本项分组为行
-        const textLines: any[][] = []
-        let currentLine: any[] = []
-        let lastY = -1
+        // 将文本项组合成行
+        let currentLineY = -1
+        let lineText = ''
         
         for (const item of sortedItems) {
-          const currentY = item.transform[5]
-          if (lastY !== -1 && Math.abs(currentY - lastY) > 3) {
-            if (currentLine.length > 0) {
-              textLines.push(currentLine)
-              currentLine = []
-            }
-          }
-          currentLine.push(item)
-          lastY = currentY
-        }
-        if (currentLine.length > 0) {
-          textLines.push(currentLine)
-        }
-        
-        // 提取字体信息
-        const fontMap = new Map()
-        if (textContent.styles) {
-          Object.entries(textContent.styles).forEach(([fontId, fontData]: [string, any]) => {
-            fontMap.set(fontId, fontData)
-          })
-        }
-        
-        // 处理每个文本项，保持精确定位和样式
-        for (let i = 0; i < textItems.length; i++) {
-          const item = textItems[i]
           if (!item.str || item.str.trim() === '') continue
           
-          // 获取变换矩阵信息
-          const transform = item.transform
-          const x = transform[4] // X坐标
-          const y = viewport.height - transform[5] // Y坐标（PDF坐标系转换为HTML坐标系）
-          const scaleX = transform[0] // X方向缩放
-          const scaleY = transform[3] // Y方向缩放
-          const skewX = transform[1] // X方向倾斜
-          const skewY = transform[2] // Y方向倾斜
+          const itemY = item.transform[5]
           
-          // 计算字体大小
-          const fontSize = Math.abs(scaleY) || 12
-          
-          // 获取字体信息
-          let fontFamily = 'Arial'
-          let fontWeight = 'normal'
-          let fontStyle = 'normal'
-          
-          try {
-            const fontObj = page.commonObjs.get(item.fontName)
-            if (fontObj && fontObj.name) {
-              // 更精确的字体名称处理
-              let cleanFontName = fontObj.name
-                .replace(/[+]/g, '')
-                .replace(/,.*$/, '') // 移除逗号后的内容
-                .replace(/[-_]/g, ' ') // 将连字符和下划线替换为空格
-                .trim()
-              
-              // 提取基础字体族名称
-              const baseFontName = cleanFontName.split(' ')[0]
-              
-              // 更全面的字体族映射
-              const fontFamilyMap: { [key: string]: string } = {
-                'Times': 'Times New Roman, Times, serif',
-                'TimesNewRoman': 'Times New Roman, Times, serif',
-                'Helvetica': 'Helvetica, Arial, sans-serif',
-                'Arial': 'Arial, Helvetica, sans-serif',
-                'Courier': 'Courier New, Courier, monospace',
-                'CourierNew': 'Courier New, Courier, monospace',
-                'Calibri': 'Calibri, Arial, sans-serif',
-                'Verdana': 'Verdana, Arial, sans-serif',
-                'Georgia': 'Georgia, Times, serif',
-                'Tahoma': 'Tahoma, Arial, sans-serif',
-                'SimSun': 'SimSun, "宋体", serif',
-                'SimHei': 'SimHei, "黑体", sans-serif',
-                'Microsoft': 'Microsoft YaHei, "微软雅黑", sans-serif',
-                'PingFang': 'PingFang SC, "苹方", sans-serif'
-              }
-              
-              // 查找匹配的字体族
-              fontFamily = fontFamilyMap[baseFontName] || fontFamilyMap[cleanFontName] || `"${cleanFontName}", Arial, sans-serif`
-              
-              // 更精确的字体样式识别
-              const fullFontName = fontObj.name.toLowerCase()
-              if (fullFontName.includes('bold') || fullFontName.includes('black') || fullFontName.includes('heavy') || fullFontName.includes('extrabold')) {
-                fontWeight = 'bold'
-              } else if (fullFontName.includes('light') || fullFontName.includes('thin')) {
-                fontWeight = '300'
-              } else if (fullFontName.includes('medium')) {
-                fontWeight = '500'
-              } else if (fullFontName.includes('semibold')) {
-                fontWeight = '600'
-              }
-              
-              if (fullFontName.includes('italic') || fullFontName.includes('oblique')) {
-                fontStyle = 'italic'
-              }
+          // 如果是新行
+          if (currentLineY !== -1 && Math.abs(itemY - currentLineY) > 3) {
+            if (lineText.trim()) {
+              textContent += lineText.trim() + '\n'
             }
-          } catch (e) {
-            // 使用默认字体处理逻辑
-            if (item.fontName) {
-              const fontName = item.fontName.toLowerCase()
-              
-              // 更全面的字体族识别
-              if (fontName.includes('times')) {
-                fontFamily = 'Times New Roman, Times, serif'
-              } else if (fontName.includes('helvetica')) {
-                fontFamily = 'Helvetica, Arial, sans-serif'
-              } else if (fontName.includes('arial')) {
-                fontFamily = 'Arial, Helvetica, sans-serif'
-              } else if (fontName.includes('courier')) {
-                fontFamily = 'Courier New, Courier, monospace'
-              } else if (fontName.includes('calibri')) {
-                fontFamily = 'Calibri, Arial, sans-serif'
-              } else if (fontName.includes('verdana')) {
-                fontFamily = 'Verdana, Arial, sans-serif'
-              } else if (fontName.includes('georgia')) {
-                fontFamily = 'Georgia, Times, serif'
-              } else if (fontName.includes('simsun') || fontName.includes('宋体')) {
-                fontFamily = 'SimSun, "宋体", serif'
-              } else if (fontName.includes('simhei') || fontName.includes('黑体')) {
-                fontFamily = 'SimHei, "黑体", sans-serif'
-              } else if (fontName.includes('microsoft') || fontName.includes('微软雅黑')) {
-                fontFamily = 'Microsoft YaHei, "微软雅黑", sans-serif'
-              }
-              
-              // 字体样式识别
-              if (fontName.includes('bold') || fontName.includes('black') || fontName.includes('heavy')) {
-                fontWeight = 'bold'
-              } else if (fontName.includes('light') || fontName.includes('thin')) {
-                fontWeight = '300'
-              }
-              
-              if (fontName.includes('italic') || fontName.includes('oblique')) {
-                fontStyle = 'italic'
-              }
-            }
-          }
-
-          // 获取文本颜色
-          let color = '#000000'
-          if (item.color) {
-            if (Array.isArray(item.color)) {
-              if (item.color.length === 1) {
-                // 灰度
-                const gray = Math.round(item.color[0] * 255)
-                color = `rgb(${gray}, ${gray}, ${gray})`
-              } else if (item.color.length === 3) {
-                // RGB
-                const r = Math.round(item.color[0] * 255)
-                const g = Math.round(item.color[1] * 255)
-                const b = Math.round(item.color[2] * 255)
-                color = `rgb(${r}, ${g}, ${b})`
-              } else if (item.color.length === 4) {
-                // CMYK
-                const c = item.color[0]
-                const m = item.color[1]
-                const y = item.color[2]
-                const k = item.color[3]
-                const r = Math.round(255 * (1 - c) * (1 - k))
-                const g = Math.round(255 * (1 - m) * (1 - k))
-                const b = Math.round(255 * (1 - y) * (1 - k))
-                color = `rgb(${r}, ${g}, ${b})`
-              }
-            }
-          } else {
-            // 从操作指令中获取颜色
-            for (const [pos, clr] of colorMap.entries()) {
-              if (pos <= i) {
-                color = clr
-              }
-            }
-          }
-
-          // 转义HTML特殊字符
-          const escapedText = (item.str || '')
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;')
-            .replace(/'/g, '&#39;')
-
-          // 构建变换矩阵CSS
-          let transformCSS = ''
-          if (skewX !== 0 || skewY !== 0 || scaleX !== fontSize || Math.abs(scaleY) !== fontSize) {
-            transformCSS = `transform: matrix(${scaleX/fontSize}, ${skewY/fontSize}, ${skewX/fontSize}, ${Math.abs(scaleY)/fontSize}, 0, 0);`
+            lineText = ''
           }
           
-          // 检查是否是行末（下一个文本项在新行）
-          let isLineEnd = false
-          let shouldAddParagraph = false
-          
-          if (i < textItems.length - 1) {
-            const nextItem = textItems[i + 1]
-            const currentY = item.transform[5]
-            const nextY = nextItem.transform[5]
-            
-            // 如果下一个文本项的Y坐标不同，说明当前项是行末
-            if (Math.abs(currentY - nextY) > 3) {
-              isLineEnd = true
-              
-              // 如果Y坐标差距较大，可能是段落分隔
-              if (Math.abs(currentY - nextY) > fontSize * 1.5) {
-                shouldAddParagraph = true
-              }
-            }
-          } else {
-            // 最后一个文本项
-            isLineEnd = true
-          }
-          
-          // 生成文本项HTML，使用流式布局自适应容器宽度
-          const relativeFontSize = Math.max(fontSize * 0.75, 12) / 16 // 转换为相对于基础字体大小的em单位
-          htmlContent += `<span class="pdf-text-item" style="
-              font-size: ${relativeFontSize}em;
-              font-family: '${fontFamily}', Arial, sans-serif;
-              font-weight: ${fontWeight};
-              font-style: ${fontStyle};
-              color: ${color};
-            ">${escapedText}</span>`
-          
-          // 在行末添加适当的换行或段落分隔
-          if (isLineEnd) {
-            if (shouldAddParagraph) {
-              htmlContent += '</p><p class="pdf-paragraph">'
-            } else {
-              htmlContent += '<br/>'
-            }
-          } else {
-            htmlContent += ' '
-          }
+          lineText += item.str + ' '
+          currentLineY = itemY
         }
         
-        // 尝试提取图片
-        try {
-          for (let j = 0; j < operatorList.fnArray.length; j++) {
-            const fn = operatorList.fnArray[j]
-            if (fn === 92) { // paintImageXObject
-              const args = operatorList.argsArray[j]
-              if (args && args.length > 0) {
-                const imageName = args[0]
-                try {
-                  const imageObj = page.objs.get(imageName)
-                  if (imageObj && imageObj.width && imageObj.height) {
-                    // 创建canvas来渲染图片
-                    const canvas = document.createElement('canvas')
-                    const ctx = canvas.getContext('2d')
-                    if (ctx) {
-                      canvas.width = imageObj.width
-                      canvas.height = imageObj.height
-                      
-                      // 渲染图片数据
-                      if (imageObj.data) {
-                        const imageData = ctx.createImageData(imageObj.width, imageObj.height)
-                        imageData.data.set(new Uint8ClampedArray(imageObj.data))
-                        ctx.putImageData(imageData, 0, 0)
-                        
-                        // 转换为base64
-                        const dataURL = canvas.toDataURL()
-                        htmlContent += `<img src="${dataURL}" style="position: absolute; max-width: 100%; height: auto;" alt="PDF图片" />`
-                      }
-                    }
-                  }
-                } catch (imgError) {
-                  console.warn('图片提取失败:', imgError)
-                }
-              }
-            }
-          }
-        } catch (e) {
-          console.warn('图片处理出错:', e)
+        // 添加最后一行
+        if (lineText.trim()) {
+          textContent += lineText.trim() + '\n'
         }
         
-        // 结束段落和页面容器
-         htmlContent += '</p></div>'
-       }
-
-       // 闭合容器标签
-        htmlContent += '</div>'
- 
-        return htmlContent
+        // 页面之间添加分隔
+        if (pageNum < pdf.numPages) {
+          textContent += '\n'
+        }
+      }
+      
+      return textContent.trim()
     } catch (error) {
       console.error('PDF解析错误:', error)
       throw new Error('PDF文件解析失败')
@@ -530,6 +181,7 @@ export default function EditorPage() {
       const result = await mammoth.extractRawText({ arrayBuffer })
       return result.value
     } catch (error) {
+      console.log('failed to parsed the document: ', error)
       throw new Error('Word文档解析失败')
     }
   }
@@ -712,7 +364,7 @@ export default function EditorPage() {
         
         const link = document.createElement('a')
         link.href = url
-        link.download = `${selectedTemplate.title}_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.pdf`
+        link.download = `${selectedTemplate.title}.pdf`
         document.body.appendChild(link)
         link.click()
         document.body.removeChild(link)
@@ -723,7 +375,7 @@ export default function EditorPage() {
         // 如果是普通URL，直接下载
         const link = document.createElement('a')
         link.href = generatedPdfUrl
-        link.download = `${selectedTemplate.title}_${new Date().toLocaleDateString('zh-CN').replace(/\//g, '-')}.pdf`
+        link.download = `${selectedTemplate.title}.pdf`
         document.body.appendChild(link)
         link.click()
         document.body.removeChild(link)
@@ -737,27 +389,9 @@ export default function EditorPage() {
   }
 
   return (
-    <div className="min-h-screen w-full bg-gray-50 flex flex-col lg:flex-row">
-      {/* 左侧导航栏 */}
-      <div className="w-full lg:w-16 bg-gray-800 flex lg:flex-col items-center py-2 lg:py-4 space-x-4 lg:space-x-0 lg:space-y-4 overflow-x-auto lg:overflow-x-visible">
-        <Link href="/templates" className="p-2 text-gray-400 hover:text-white transition-colors">
-          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-          </svg>
-        </Link>
-        <div className="p-2 text-gray-400 hover:text-white transition-colors cursor-pointer">
-          <History className="w-6 h-6" />
-        </div>
-        <div className="p-2 text-gray-400 hover:text-white transition-colors cursor-pointer">
-          <Settings className="w-6 h-6" />
-        </div>
-        <div className="p-2 text-gray-400 hover:text-white transition-colors cursor-pointer">
-          <Palette className="w-6 h-6" />
-        </div>
-        <div className="p-2 text-gray-400 hover:text-white transition-colors cursor-pointer">
-          <Download className="w-6 h-6" />
-        </div>
-      </div>
+    <div className="min-h-screen w-full bg-gray-50 flex">
+      {/* 左侧功能菜单 */}
+      <Sidebar />
 
       {/* 主内容区域 */}
       <div className="flex-1 flex min-w-0 overflow-hidden">
@@ -782,7 +416,7 @@ export default function EditorPage() {
                 placeholder="搜索..."
                 value={templateSearchQuery}
                 onChange={(e) => setTemplateSearchQuery(e.target.value)}
-                className="px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 w-20"
+                className="px-2 py-1 border border-gray-300 rounded text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 w-40"
               />
             </div>
             

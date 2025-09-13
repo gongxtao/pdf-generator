@@ -16,7 +16,7 @@ export interface Template {
 }
 
 // 从JSON文件加载模板数据
-export const templates: Template[] = templateData.map((template: any) => ({
+export const templates: Template[] = templateData.map((template: Omit<Template, 'header_file' | 'footer_file'> & { header_file: string | null; footer_file: string | null }) => ({
   ...template,
   header_file: template.header_file || undefined,
   footer_file: template.footer_file || undefined,

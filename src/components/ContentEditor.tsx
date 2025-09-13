@@ -14,7 +14,11 @@ export default function ContentEditor({ title, content, onChange, className = ''
   const [localContent, setLocalContent] = useState(content)
   const [isClient, setIsClient] = useState(false)
   const editorRef = useRef<HTMLTextAreaElement>(null)
-  const editorInstanceRef = useRef<any>(null)
+  const editorInstanceRef = useRef<{
+    getContent: () => string;
+    setContent: (content: string) => void;
+    [key: string]: unknown;
+  } | null>(null)
 
   // 确保组件在客户端渲染
   useEffect(() => {
@@ -101,7 +105,11 @@ export default function ContentEditor({ title, content, onChange, className = ''
         base_url: '/tinymce',
         suffix: '.min',
         // 编辑器初始化完成后的回调
-        init_instance_callback: (editor: any) => {
+        init_instance_callback: (editor: {
+          getContent: () => string;
+          setContent: (content: string) => void;
+          [key: string]: unknown;
+        }) => {
           editorInstanceRef.current = editor
           
           // 设置初始内容

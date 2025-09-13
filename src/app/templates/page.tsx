@@ -2,8 +2,9 @@
 
 import React, { useState } from 'react'
 import Link from 'next/link'
-import { Search, Filter, Grid, List, Star, Download, Eye } from 'lucide-react'
+import { Search, Filter } from 'lucide-react'
 import { Template, getAllTemplates } from '@/data/templates'
+import Sidebar from '@/components/Sidebar'
 
 const TemplatesPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('')
@@ -17,12 +18,6 @@ const TemplatesPage: React.FC = () => {
 
   // 获取模板数据
   const templates: Template[] = getAllTemplates()
-
-  // 功能区数据
-  const sidebarFeatures = [
-    { name: 'PDF制作', icon: '📄', href: '/generate' },
-    { name: '历史记录', icon: '📋', href: '/history' }
-  ]
 
   // 从模板数据中动态获取分类
   const categories = ['All', ...Array.from(new Set(templates.map(template => template.category)))]
@@ -89,22 +84,7 @@ const TemplatesPage: React.FC = () => {
 
       <div className="flex">
         {/* 左侧功能菜单 */}
-        <aside className="w-20 bg-white border-r border-gray-200 min-h-screen">
-          <div className="p-2">
-            <nav className="space-y-4">
-              {sidebarFeatures.map((feature) => (
-                <Link
-                  key={feature.name}
-                  href={feature.href}
-                  className="w-full flex flex-col items-center px-2 py-3 text-xs font-medium rounded-lg transition-colors text-gray-700 hover:bg-gray-50"
-                >
-                  <span className="text-xl mb-1">{feature.icon}</span>
-                  <span className="text-center leading-tight">{feature.name}</span>
-                </Link>
-              ))}
-            </nav>
-          </div>
-        </aside>
+        <Sidebar />
 
         {/* 主要内容区域 */}
         <main className="flex-1 p-6">
