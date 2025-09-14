@@ -4,23 +4,76 @@ import fs from 'fs';
 import path from 'path';
 
 /**
- * 解析HTML内容，提取```html代码块中的内容
- * @param rawOutput 原始输出内容
- * @returns 提取的HTML内容
+ * 从原始输出中解析HTML内容
+ * @param rawOutput 原始输出字符串
+ * @returns 解析后的HTML内容
  */
 function parseHtmlContent(rawOutput: string): string {
-  // 使用正则表达式匹配```html和```之间的内容
-  const htmlBlockRegex = /```html\s*([\s\S]*?)\s*```/i;
-  const match = rawOutput.match(htmlBlockRegex);
+  // 首先尝试匹配 ```html 和 ``` 之间的内容
+  const htmlMatch = rawOutput.match(/```html\s*([\s\S]*?)\s*```/);
   
-  if (match && match[1]) {
-    // 返回提取的HTML内容，去除首尾空白字符
-    return match[1].trim();
+  if (htmlMatch && htmlMatch[1]) {
+    const htmlContent = htmlMatch[1].trim();
+    // 检查提取的内容是否包含完整的HTML结构
+    if (htmlContent.includes('<!DOCTYPE') || htmlContent.includes('<html')) {
+      return htmlContent;
+    }
+    // 如果只是HTML片段，智能包装成完整的HTML文档
+    return wrapHtmlFragment(htmlContent);
   }
   
-  // 如果没有找到```html代码块，返回原始内容
-  console.warn('未找到HTML代码块，返回原始内容');
-  return rawOutput;
+  // 如果没有找到HTML代码块，检查原始输出是否包含HTML标签
+  if (rawOutput.includes('<') && rawOutput.includes('>')) {
+    // 如果包含完整的HTML结构，直接返回
+    if (rawOutput.includes('<!DOCTYPE') || rawOutput.includes('<html')) {
+      return rawOutput.trim();
+    }
+    // 如果只是HTML片段，智能包装成完整的HTML文档
+    return wrapHtmlFragment(rawOutput.trim());
+  }
+  
+  // 如果都不是HTML内容，包装成简单的HTML文档
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Generated Content</title>
+</head>
+<body>
+<p>${rawOutput.trim()}</p>
+</body>
+</html>`;
+}
+
+// 智能包装HTML片段，保留样式信息
+function wrapHtmlFragment(htmlFragment: string): string {
+  // 提取样式标签
+  const styleMatches = htmlFragment.match(/<style[^>]*>[\s\S]*?<\/style>/gi) || [];
+  const linkMatches = htmlFragment.match(/<link[^>]*rel\s*=\s*["']stylesheet["'][^>]*>/gi) || [];
+  
+  // 移除已提取的样式标签，避免重复
+  let bodyContent = htmlFragment;
+  styleMatches.forEach(style => {
+    bodyContent = bodyContent.replace(style, '');
+  });
+  linkMatches.forEach(link => {
+    bodyContent = bodyContent.replace(link, '');
+  });
+  
+  // 构建完整的HTML文档
+  const headStyles = [...linkMatches, ...styleMatches].join('\n');
+  
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Generated Content</title>
+${headStyles ? '\n' + headStyles : ''}
+</head>
+<body>
+${bodyContent.trim()}
+</body>
+</html>`;
 }
 
 // Replicate客户端实例

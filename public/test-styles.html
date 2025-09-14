@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>完整样式测试文档</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #3b82f6;
+            --secondary-color: #10b981;
+            --accent-color: #f59e0b;
+            --text-color: #1f2937;
+            --bg-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --border-radius: 12px;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            line-height: 1.6;
+            color: var(--text-color);
+            background: var(--bg-gradient);
+            padding: 2rem;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: var(--border-radius);
+            box-shadow: var(--shadow-lg);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            padding: 2rem;
+            text-align: center;
+            position: relative;
+        }
+
+        .header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="50" cy="50" r="2" fill="white" opacity="0.1"/></svg>') repeat;
+            background-size: 20px 20px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+            position: relative;
+            z-index: 1;
+        }
+
+        .content {
+            padding: 2rem;
+        }
+
+        .section {
+            margin-bottom: 2rem;
+        }
+
+        .section h2 {
+            color: var(--primary-color);
+            font-size: 1.8rem;
+            margin-bottom: 1rem;
+            position: relative;
+            padding-left: 1rem;
+        }
+
+        .section h2::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 4px;
+            height: 100%;
+            background: var(--accent-color);
+            border-radius: 2px;
+        }
+
+        .highlight-box {
+            background: linear-gradient(135deg, #fef3c7 0%, #fed7aa 100%);
+            border: 2px solid var(--accent-color);
+            border-radius: var(--border-radius);
+            padding: 1.5rem;
+            margin: 1rem 0;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .highlight-box::after {
+            content: '✨';
+            position: absolute;
+            top: 1rem;
+            right: 1rem;
+            font-size: 1.5rem;
+            opacity: 0.7;
+        }
+
+        .badge {
+            display: inline-block;
+            background: var(--secondary-color);
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            margin: 0.125rem;
+            transition: all 0.2s ease;
+        }
+
+        .badge:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(16, 185, 129, 0.3);
+        }
+
+        .badge.primary {
+            background: var(--primary-color);
+        }
+
+        .badge.accent {
+            background: var(--accent-color);
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            margin: 2rem 0;
+        }
+
+        .feature-card {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: var(--border-radius);
+            padding: 1.5rem;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-lg);
+            border-color: var(--primary-color);
+        }
+
+        .feature-card h3 {
+            color: var(--primary-color);
+            font-size: 1.25rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 1.5rem 0;
+            border-radius: var(--border-radius);
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .data-table th {
+            background: var(--primary-color);
+            color: white;
+            padding: 1rem;
+            text-align: left;
+            font-weight: 600;
+        }
+
+        .data-table td {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .data-table tr:nth-child(even) {
+            background: #f9fafb;
+        }
+
+        .data-table tr:hover {
+            background: #f3f4f6;
+        }
+
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-weight: 500;
+        }
+
+        .status-indicator.success::before {
+            content: '✅';
+        }
+
+        .status-indicator.warning::before {
+            content: '⚠️';
+        }
+
+        .status-indicator.info::before {
+            content: 'ℹ️';
+        }
+
+        .code-block {
+            background: #1f2937;
+            color: #f9fafb;
+            padding: 1rem;
+            border-radius: var(--border-radius);
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.875rem;
+            overflow-x: auto;
+            margin: 1rem 0;
+        }
+
+        .code-block .keyword {
+            color: #60a5fa;
+        }
+
+        .code-block .string {
+            color: #34d399;
+        }
+
+        .code-block .comment {
+            color: #9ca3af;
+            font-style: italic;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e5e7eb;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 1rem 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+            width: 75%;
+            transition: width 0.3s ease;
+        }
+
+        .link-demo a {
+            color: var(--primary-color);
+            text-decoration: none;
+            font-weight: 500;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s ease;
+        }
+
+        .link-demo a:hover {
+            color: var(--secondary-color);
+            border-bottom-color: var(--secondary-color);
+        }
+
+        .link-demo a:visited {
+            color: #8b5cf6;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 1rem;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+
+            .feature-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate-fade-in {
+            animation: fadeInUp 0.6s ease-out;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>完整样式测试文档</h1>
+            <p>测试Tiptap编辑器的动态样式提取和渲染能力</p>
+        </header>
+
+        <main class="content">
+            <section class="section animate-fade-in">
+                <h2>CSS特性测试</h2>
+                <p>这个文档包含了各种CSS特性，用于测试样式提取系统的完整性：</p>
+                
+                <div class="highlight-box">
+                    <strong>重点测试项目：</strong> CSS变量、伪元素、渐变背景、动画效果、响应式设计等。
+                </div>
+
+                <div class="link-demo">
+                    <p>链接样式测试：<a href="#test1">普通链接</a>、<a href="#test2">悬停效果</a>、<a href="#visited" class="visited">已访问链接</a></p>
+                </div>
+            </section>
+
+            <section class="section">
+                <h2>标签和徽章</h2>
+                <p>各种样式的标签组件：</p>
+                <div>
+                    <span class="badge">默认标签</span>
+                    <span class="badge primary">主要标签</span>
+                    <span class="badge accent">强调标签</span>
+                </div>
+            </section>
+
+            <section class="section">
+                <h2>功能特性网格</h2>
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <h3>CSS变量支持</h3>
+                        <p>完整支持CSS自定义属性，包括颜色、尺寸、阴影等各种变量类型。</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>伪元素渲染</h3>
+                        <p>正确处理::before和::after伪元素，保持视觉效果的完整性。</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>渐变背景</h3>
+                        <p>支持线性和径向渐变，包括复杂的多色渐变效果。</p>
+                    </div>
+                    <div class="feature-card">
+                        <h3>响应式设计</h3>
+                        <p>媒体查询和弹性布局在编辑器中的正确表现。</p>
+                    </div>
+                </div>
+            </section>
+
+            <section class="section">
+                <h2>数据表格</h2>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>特性名称</th>
+                            <th>支持状态</th>
+                            <th>完成度</th>
+                            <th>备注</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>CSS变量</td>
+                            <td><span class="status-indicator success">完全支持</span></td>
+                            <td>100%</td>
+                            <td>包括嵌套变量</td>
+                        </tr>
+                        <tr>
+                            <td>伪元素</td>
+                            <td><span class="status-indicator success">完全支持</span></td>
+                            <td>95%</td>
+                            <td>::before, ::after</td>
+                        </tr>
+                        <tr>
+                            <td>动画效果</td>
+                            <td><span class="status-indicator warning">部分支持</span></td>
+                            <td>80%</td>
+                            <td>基础动画可用</td>
+                        </tr>
+                        <tr>
+                            <td>Grid布局</td>
+                            <td><span class="status-indicator success">完全支持</span></td>
+                            <td>100%</td>
+                            <td>现代布局系统</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <section class="section">
+                <h2>代码示例</h2>
+                <div class="code-block">
+<span class="comment">/* CSS变量定义示例 */</span>
+<span class="keyword">:root</span> {
+  <span class="keyword">--primary-color</span>: <span class="string">#3b82f6</span>;
+  <span class="keyword">--shadow-lg</span>: <span class="string">0 10px 15px rgba(0, 0, 0, 0.1)</span>;
+}
+
+<span class="comment">/* 使用变量 */</span>
+<span class="keyword">.button</span> {
+  <span class="keyword">background</span>: <span class="string">var(--primary-color)</span>;
+  <span class="keyword">box-shadow</span>: <span class="string">var(--shadow-lg)</span>;
+}
+                </div>
+            </section>
+
+            <section class="section">
+                <h2>进度指示器</h2>
+                <p>样式提取完成度：</p>
+                <div class="progress-bar">
+                    <div class="progress-fill"></div>
+                </div>
+                <p><small>当前进度：75% - 大部分CSS特性已正确提取和应用</small></p>
+            </section>
+        </main>
+    </div>
+</body>
+</html>

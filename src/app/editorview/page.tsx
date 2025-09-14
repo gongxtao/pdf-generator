@@ -5,7 +5,7 @@ import { useState, useEffect, useMemo, useRef } from 'react'
 import Link from 'next/link'
 import { useSearchParams } from 'next/navigation'
 import { useToast } from '@/components/ToastManager'
-import { Upload, Download, FileText, Settings, Palette, History, Edit3, Save, RotateCcw, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Upload, Download, FileText, Settings, Palette, History, Edit3, Save, RotateCcw, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react'
 import * as pdfjsLib from 'pdfjs-dist'
 import mammoth from 'mammoth'
 import { Template, getAllTemplates } from '@/data/templates'
@@ -13,6 +13,12 @@ import Sidebar from '@/components/Sidebar'
 
 // 导入PDF预览组件
 import PDFPreview from '@/components/PDFPreview'
+import dynamic from 'next/dynamic'
+
+const TiptapEditor = dynamic(() => import('@/components/TiptapEditor'), {
+  ssr: false,
+  loading: () => <div className="p-6 text-center text-gray-500">加载编辑器中...</div>
+})
 
 // 动态导入PDF.js worker
 let pdfjsWorkerLoaded = false
@@ -37,9 +43,12 @@ export default function EditorPage() {
   // 状态变量
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null)
   const [content, setContent] = useState('') // 左侧文本编辑区域的内容
+  const [richContent, setRichContent] = useState('') // 右侧Tiptap编辑器的富文本内容
   const [templateSearchQuery, setTemplateSearchQuery] = useState('')
   const [isGenerating, setIsGenerating] = useState(false)
   const [generatedPdfUrl, setGeneratedPdfUrl] = useState<string | null>(null)
+  const [isImportingHtml, setIsImportingHtml] = useState(false)
+  const [isExportingPdf, setIsExportingPdf] = useState(false)
   const templateScrollRef = useRef<HTMLDivElement>(null)
 
   // 获取所有模板
@@ -80,7 +89,117 @@ export default function EditorPage() {
     }
   }, [searchParams, allTemplates])
 
-  // ControlledSimpleEditor会自动处理内容同步，不需要手动useEffect
+  // 单向逻辑：左侧是原始内容，右侧是AI生成的富文本内容
+  // 右侧编辑器的内容独立管理，不与左侧同步
+
+  // 导入HTML到Tiptap编辑器
+  const handleImportHtml = async () => {
+    if (!selectedTemplate || !content.trim()) {
+      showError('请选择模板并输入内容')
+      return
+    }
+
+    setIsImportingHtml(true)
+    
+    try {
+      // 调用生成HTML的API
+      const response = await fetch('/api/generate-html', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: selectedTemplate.title,
+          content: content,
+          css: selectedTemplate.template_content || '',
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`生成HTML失败: ${response.status}`)
+      }
+
+      const result = await response.json()
+      
+      if (!result.success || !result.html) {
+        throw new Error(result.error || 'HTML生成失败')
+      }
+      
+      console.log('生成的HTML:', result.html)
+      
+      // 使用动态样式处理功能导入HTML
+      // 直接设置HTML内容，TiptapEditor的动态样式功能会自动提取和应用样式
+      setRichContent(result.html)
+      
+      showSuccess('HTML内容已导入到富文本编辑器！')
+      
+    } catch (error) {
+      console.error('导入HTML失败:', error)
+      showError(`导入HTML失败: ${error instanceof Error ? error.message : '未知错误'}`)
+    } finally {
+      setIsImportingHtml(false)
+    }
+  }
+
+  // 从Tiptap编辑器导出PDF
+  const handleExportPdfFromEditor = async () => {
+    if (!richContent.trim()) {
+      showError('富文本编辑器内容为空，无法导出PDF')
+      return
+    }
+
+    setIsExportingPdf(true)
+    
+    try {
+      // 调用HTML转PDF的API
+      const response = await fetch('/api/html-to-pdf', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          html: richContent,
+          options: {
+            format: 'A4',
+            printBackground: true,
+            margin: {
+              top: '20mm',
+              right: '20mm',
+              bottom: '20mm',
+              left: '20mm'
+            }
+          }
+        }),
+      })
+
+      if (!response.ok) {
+        throw new Error(`导出PDF失败: ${response.status}`)
+      }
+
+      // 获取PDF文件
+      const pdfBlob = await response.blob()
+      
+      // 创建下载链接
+      const url = URL.createObjectURL(pdfBlob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `${selectedTemplate?.title || '富文本编辑器'}_导出.pdf`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+      
+      // 清理临时URL
+      URL.revokeObjectURL(url)
+      
+      showSuccess('PDF导出成功！')
+      
+    } catch (error) {
+      console.error('导出PDF失败:', error)
+      showError(`导出PDF失败: ${error instanceof Error ? error.message : '未知错误'}`)
+    } finally {
+      setIsExportingPdf(false)
+    }
+  }
 
   // 处理模板选择
   const handleTemplateSelect = (template: Template) => {
@@ -295,7 +414,6 @@ export default function EditorPage() {
   }
 
   // 生成PDF
-
   const handleGeneratePDF = async () => {
     if (!selectedTemplate || !content.trim()) {
       showError('请选择模板并输入内容')
@@ -542,11 +660,14 @@ export default function EditorPage() {
             {/* 操作按钮 */}
             <div className="space-y-2 flex flex-col">
               <button
-                onClick={handleGeneratePDF}
+                onClick={handleImportHtml}
                 disabled={!selectedTemplate || !content.trim() || isGenerating}
-                className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium text-sm"
+                className="w-full bg-blue-600 text-white py-2 rounded hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium text-sm flex items-center justify-center space-x-2"
               >
-                {isGenerating ? '生成中...' : '生成PDF'}
+                {isGenerating && (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                )}
+                <span>{isGenerating ? '生成中...' : '生成PDF'}</span>
               </button>
               
               {generatedPdfUrl && (
@@ -562,11 +683,37 @@ export default function EditorPage() {
           </div>
         </div>
 
-        {/* 右侧PDF预览区域 - 占整个右侧 */}
+        {/* 右侧富文本编辑区域 - 占整个右侧 */}
         <div className="w-2/3 bg-gray-50 p-4 flex flex-col">
           <div className="flex items-center justify-between mb-4">
-            <h3 className="text-lg font-semibold text-gray-900">PDF预览</h3>
+            <h3 className="text-lg font-semibold text-gray-900">富文本编辑器</h3>
             <div className="flex items-center space-x-2">
+              {/* 导入HTML按钮 */}
+              <button
+                onClick={handleImportHtml}
+                disabled={!selectedTemplate || !content.trim() || isImportingHtml}
+                className="bg-blue-600 text-white px-3 py-1.5 rounded text-sm hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium flex items-center space-x-1"
+              >
+                {isImportingHtml && (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                )}
+                <FileText className="w-3 h-3" />
+                <span>{isImportingHtml ? '导入中...' : '导入HTML'}</span>
+              </button>
+              
+              {/* 导出PDF按钮 */}
+              <button
+                onClick={handleExportPdfFromEditor}
+                disabled={!richContent.trim() || isExportingPdf}
+                className="bg-green-600 text-white px-3 py-1.5 rounded text-sm hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium flex items-center space-x-1"
+              >
+                {isExportingPdf && (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                )}
+                <Download className="w-3 h-3" />
+                <span>{isExportingPdf ? '导出中...' : '导出PDF'}</span>
+              </button>
+              
               {generatedPdfUrl && (
                 <div className="text-sm text-green-600 font-medium">
                   ✓ PDF已生成
@@ -575,24 +722,14 @@ export default function EditorPage() {
             </div>
           </div>
           
-          {generatedPdfUrl ? (
-            <div className="flex-1 bg-white shadow-lg rounded-lg overflow-hidden">
-              <PDFPreview 
-                pdfUrl={generatedPdfUrl}
-                className="h-full"
-              />
-            </div>
-          ) : (
-            <div className="flex-1 flex items-center justify-center bg-white rounded-lg border-2 border-dashed border-gray-300">
-              <div className="text-center">
-                <FileText className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-500 mb-2">PDF预览区域</p>
-                <p className="text-sm text-gray-400">
-                  {!selectedTemplate ? '请先选择模板' : '请输入内容后点击"生成PDF"查看预览'}
-                </p>
-              </div>
-            </div>
-          )}
+          <div className="flex-1 bg-white shadow-lg rounded-lg overflow-hidden">
+            <TiptapEditor 
+              content={richContent}
+              onContentChange={setRichContent}
+              enableDynamicStyles={true}
+              className="h-full"
+            />
+          </div>
         </div>
       </div>
     </div>
