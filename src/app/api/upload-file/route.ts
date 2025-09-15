@@ -93,7 +93,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<UploadFil
   } catch (error) {
     console.error('文件上传失败:', error);
     return NextResponse.json(
-      { success: false, error: '文件上传失败' },
+      { success: false, error: '文件上传失败' + error },
       { status: 500 }
     );
   }
@@ -139,12 +139,13 @@ async function uploadToR2(buffer: Buffer, path: string, contentType: string): Pr
   });
   
   // 执行上传
-  await client.send(command);
+  const result = await client.send(command);
+  console.log('上传结果:', result);
   
   // 返回公共访问URL
   // 从endpoint提取account hash: https://81269bfc6041f5db4c198c4972532c56.r2.cloudflarestorage.com
-  const accountHash = process.env.S3_CLIENT_ENDPOINT?.split('//')[1]?.split('.')[0];
-  const publicUrl = `https://pub-${accountHash}.r2.dev/${process.env.S3_BUCKET_NAME}/${path}`;
+  // const accountHash = process.env.S3_CLIENT_ENDPOINT?.split('//')[1]?.split('.')[0];
+  const publicUrl = `${process.env.S3_PUBLIC_URL}/${path}`;
   
   return publicUrl;
 }

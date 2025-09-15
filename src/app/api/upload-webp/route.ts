@@ -56,6 +56,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<UploadWeb
 
     const uploadResult = await uploadResponse.json();
 
+    console.log('上传结果:', uploadResult);
     if (!uploadResult.success) {
       return NextResponse.json(
         { success: false, error: uploadResult.error || '上传失败' },
