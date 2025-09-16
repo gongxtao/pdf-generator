@@ -230,67 +230,11 @@ const WebPPreview: React.FC<WebPPreviewProps> = ({
     try {
       let webpData = generatedWebP
       
-      // 如果没有生成WebP，先生成
+      // 如果没有生成WebP，直接报错
       if (!webpData) {
-        if (!previewHtml) {
-          setError('请先选择模板并编辑CSS')
-          setIsUploading(false)
-          return
-        }
-        
-        setIsGenerating(true)
-        
-        try {
-          // 等待iframe加载完成
-          await new Promise(resolve => setTimeout(resolve, 500))
-          
-          // 获取iframe的document
-          const iframeDoc = iframeRef.current?.contentDocument || iframeRef.current?.contentWindow?.document
-          if (!iframeDoc) {
-            throw new Error('无法访问iframe内容')
-          }
-
-          // 使用html2canvas捕获iframe内容
-          const canvas = await html2canvas(iframeDoc.body, {
-            width: webpSettings.width,
-            height: webpSettings.height,
-            useCORS: true,
-            allowTaint: true,
-            logging: false
-          })
-
-          // 如果需要调整尺寸，创建新的canvas
-          let finalCanvas = canvas
-          if (canvas.width !== webpSettings.width || canvas.height !== webpSettings.height) {
-            finalCanvas = document.createElement('canvas')
-            const ctx = finalCanvas.getContext('2d')
-            if (!ctx) throw new Error('无法创建canvas上下文')
-
-            finalCanvas.width = webpSettings.width
-            finalCanvas.height = webpSettings.height
-
-            // 设置背景色
-            ctx.fillStyle = webpSettings.backgroundColor
-            ctx.fillRect(0, 0, finalCanvas.width, finalCanvas.height)
-
-            // 绘制缩放后的图像
-            ctx.drawImage(canvas, 0, 0, webpSettings.width, webpSettings.height)
-          }
-
-          // 转换为WebP
-          webpData = finalCanvas.toDataURL('image/webp', webpSettings.quality / 100)
-          setGeneratedWebP(webpData)
-          onWebPGenerated?.(webpData)
-          
-        } catch (error) {
-          console.error('生成WebP失败:', error)
-          setError('生成WebP失败，请检查模板和CSS内容')
-          setIsGenerating(false)
-          setIsUploading(false)
-          return
-        } finally {
-          setIsGenerating(false)
-        }
+        setError('请先生成WebP图片')
+        setIsUploading(false)
+        return
       }
 
       const response = await fetch('/api/upload-webp', {
