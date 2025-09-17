@@ -23,7 +23,190 @@ export class CSSExtractor {
    * 添加最小化样式，保持Word原始外观
    */
   private addMinimalStyles(): void {
-    // 完全不添加任何样式，保持Word 100%原始格式
+    // 添加基础样式以增强Word文档的视觉还原
+    
+    // 页面基础样式
+    this.addStyle('body', [
+      'font-family: "Times New Roman", "宋体", serif',
+      'font-size: 12pt',
+      'line-height: 1.15',
+      'margin: 0',
+      'padding: 20px',
+      'background-color: #ffffff',
+      'color: #000000'
+    ]);
+    
+    // 标题样式增强
+    this.addStyle('h1, h1.title', [
+      'font-size: 18pt',
+      'font-weight: bold',
+      'margin: 24pt 0 12pt 0',
+      'text-align: center',
+      'page-break-after: avoid'
+    ]);
+    
+    this.addStyle('h2, h2.subtitle', [
+      'font-size: 16pt', 
+      'font-weight: bold',
+      'margin: 18pt 0 6pt 0',
+      'page-break-after: avoid'
+    ]);
+    
+    this.addStyle('h3', [
+      'font-size: 14pt',
+      'font-weight: bold', 
+      'margin: 12pt 0 6pt 0',
+      'page-break-after: avoid'
+    ]);
+    
+    this.addStyle('h4, h5, h6', [
+      'font-size: 12pt',
+      'font-weight: bold',
+      'margin: 12pt 0 3pt 0',
+      'page-break-after: avoid'
+    ]);
+    
+    // 段落样式
+    this.addStyle('p', [
+      'margin: 6pt 0',
+      'text-align: justify',
+      'text-indent: 0',
+      'line-height: 1.15'
+    ]);
+    
+    this.addStyle('p.list-paragraph', [
+      'margin-left: 18pt',
+      'text-indent: -18pt'
+    ]);
+    
+    this.addStyle('p.caption', [
+      'font-size: 10pt',
+      'text-align: center',
+      'font-style: italic',
+      'margin: 6pt 0'
+    ]);
+    
+    // 引用样式
+    this.addStyle('blockquote', [
+      'margin: 12pt 36pt',
+      'padding: 0',
+      'font-style: italic',
+      'border-left: 3pt solid #cccccc',
+      'padding-left: 12pt'
+    ]);
+    
+    this.addStyle('blockquote.intense', [
+      'background-color: #f5f5f5',
+      'padding: 12pt',
+      'border-left: 4pt solid #0066cc'
+    ]);
+    
+    // 表格样式增强
+    this.addStyle('table', [
+      'border-collapse: collapse',
+      'width: 100%',
+      'margin: 12pt 0',
+      'font-size: 11pt'
+    ]);
+    
+    this.addStyle('table.grid', [
+      'border: 1pt solid #000000'
+    ]);
+    
+    this.addStyle('table.grid th, table.grid td', [
+      'border: 1pt solid #000000',
+      'padding: 4pt 6pt',
+      'text-align: left',
+      'vertical-align: top'
+    ]);
+    
+    this.addStyle('table.light-shading', [
+      'border: 1pt solid #bfbfbf'
+    ]);
+    
+    this.addStyle('table.light-shading th', [
+      'background-color: #f2f2f2',
+      'border: 1pt solid #bfbfbf',
+      'padding: 4pt 6pt',
+      'font-weight: bold'
+    ]);
+    
+    this.addStyle('table.light-shading td', [
+      'border: 1pt solid #bfbfbf',
+      'padding: 4pt 6pt'
+    ]);
+    
+    this.addStyle('table.medium-shading th', [
+      'background-color: #d9d9d9',
+      'border: 1pt solid #8c8c8c',
+      'padding: 4pt 6pt',
+      'font-weight: bold'
+    ]);
+    
+    this.addStyle('table.medium-shading td', [
+      'border: 1pt solid #8c8c8c',
+      'padding: 4pt 6pt'
+    ]);
+    
+    this.addStyle('table.dark-list th', [
+      'background-color: #4f81bd',
+      'color: white',
+      'border: 1pt solid #4f81bd',
+      'padding: 4pt 6pt',
+      'font-weight: bold'
+    ]);
+    
+    this.addStyle('table.dark-list td', [
+      'border: 1pt solid #4f81bd',
+      'padding: 4pt 6pt'
+    ]);
+    
+    // 字符格式样式
+    this.addStyle('strong, strong.intense', [
+      'font-weight: bold'
+    ]);
+    
+    this.addStyle('em, em.subtle', [
+      'font-style: italic'
+    ]);
+    
+    this.addStyle('cite', [
+      'font-style: italic',
+      'text-decoration: underline'
+    ]);
+    
+    this.addStyle('a.hyperlink', [
+      'color: #0066cc',
+      'text-decoration: underline'
+    ]);
+    
+    // 图片样式
+    this.addStyle('img', [
+      'max-width: 100%',
+      'height: auto',
+      'display: block',
+      'margin: 10px auto',
+      'page-break-inside: avoid'
+    ]);
+    
+    // 列表样式
+    this.addStyle('ul, ol', [
+      'margin: 6pt 0',
+      'padding-left: 24pt'
+    ]);
+    
+    this.addStyle('li', [
+      'margin: 3pt 0',
+      'line-height: 1.15'
+    ]);
+    
+    // 分页控制
+    this.addStyle('@media print', [
+      'body { margin: 0; }',
+      'h1, h2, h3, h4, h5, h6 { page-break-after: avoid; }',
+      'table, img { page-break-inside: avoid; }',
+      'p { orphans: 3; widows: 3; }'
+    ]);
   }
 
   /**
@@ -44,8 +227,20 @@ export class CSSExtractor {
    * 生成CSS字符串
    */
   public generateCSS(): string {
-    // 不生成任何CSS，完全保持Word原始样式
-    return '';
+    let css = '';
+    
+    // 遍历所有样式规则
+    for (const [selector, styles] of this.extractedStyles) {
+      if (styles.size > 0) {
+        css += `${selector} {\n`;
+        for (const style of styles) {
+          css += `  ${style};\n`;
+        }
+        css += '}\n\n';
+      }
+    }
+    
+    return css.trim();
   }
 
   /**

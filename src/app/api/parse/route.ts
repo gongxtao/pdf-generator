@@ -5,6 +5,8 @@ import os from 'os'
 import mammoth from 'mammoth'
 import { z } from 'zod'
 import { CSSExtractor } from '@/lib/css-extractor'
+import { DocxParser, DocumentStructure } from '@/lib/docx-parser'
+import { HtmlGenerator } from '@/lib/html-generator'
 
 // 定义响应接口
 interface ParseResponse {
@@ -37,23 +39,129 @@ interface ParseResponse {
   }
 }
 
-// Word文档解析函数
-// 使用 mammoth.js 库来解析 .docx 文件，集成CSS提取器和HTML到PDF转换器
+// Word文档解析函数 - 使用新的深度解析器
+async function parseWordDocumentAdvanced(buffer: Buffer): Promise<ParseResponse['data']> {
+  try {
+    // 使用新的docx解析器
+    const parser = new DocxParser();
+    await parser.loadFromBuffer(buffer);
+    
+    // 获取解析结果
+    const wordState = await parser.parseDocx();
+    
+    // 构建 DocumentStructure
+    const documentStructure: DocumentStructure = {
+      elements: wordState.elements,
+      pageSettings: wordState.page,
+      styles: wordState.styles,
+      headers: wordState.headers || [],
+      footers: wordState.footers || [],
+      backgrounds: wordState.backgrounds || [],
+      images: wordState.images,
+      metadata: {
+        title: wordState.metadata?.title,
+        author: wordState.metadata?.author,
+        created: wordState.metadata?.created,
+        modified: wordState.metadata?.modified,
+        pageCount: wordState.metadata?.pageCount,
+        wordCount: wordState.metadata?.wordCount
+      }
+    };
+    
+    // 使用HTML生成器
+    const htmlGenerator = new HtmlGenerator(documentStructure);
+    const html = htmlGenerator.generateHtml();
+    
+    // 提取元数据
+    const wordCount = documentStructure.elements
+      .filter(el => el.type === 'paragraph')
+      .reduce((count, el) => count + el.content.split(/\s+/).length, 0);
+    
+    const hasImages = documentStructure.elements.some(el => el.type === 'image');
+    const hasTables = documentStructure.elements.some(el => el.type === 'table');
+    const hasHeaders = documentStructure.headers.length > 0;
+    const hasFooters = documentStructure.footers.length > 0;
+    const hasBackgrounds = documentStructure.backgrounds.length > 0;
+    
+    // 估算页数
+    const pageCount = Math.max(1, Math.ceil(wordCount / 500));
+
+    return {
+      html: html.trim(),
+      css: '', // CSS已包含在HTML中
+      images: [],
+      metadata: {
+        title: '解析的Word文档',
+        author: '未知作者',
+        wordCount: wordCount,
+        pageCount: pageCount
+      }
+    };
+  } catch (error) {
+    console.error('高级Word文档解析失败:', error);
+    // 回退到基础解析
+    return parseWordDocument(buffer);
+  }
+}
+
+// Word文档解析函数 - 基础版本（作为回退）
 async function parseWordDocument(buffer: Buffer): Promise<ParseResponse['data']> {
   try {
-    // 配置 mammoth.js 完全保持Word原始格式
+    // 配置 mammoth.js 增强样式还原
     const options = {
-      // 移除所有样式映射，完全保持Word原始格式
-      styleMap: [],
-      // 不包含默认样式映射
-      includeDefaultStyleMap: false,
-      // 转换图片为base64
+      // 增强样式映射，保持更多Word原始格式
+      styleMap: [
+        // 段落样式映射
+        "p[style-name='Heading 1'] => h1:fresh",
+        "p[style-name='Heading 2'] => h2:fresh", 
+        "p[style-name='Heading 3'] => h3:fresh",
+        "p[style-name='Heading 4'] => h4:fresh",
+        "p[style-name='Heading 5'] => h5:fresh",
+        "p[style-name='Heading 6'] => h6:fresh",
+        "p[style-name='Title'] => h1.title:fresh",
+        "p[style-name='Subtitle'] => h2.subtitle:fresh",
+        "p[style-name='Quote'] => blockquote:fresh",
+        "p[style-name='Intense Quote'] => blockquote.intense:fresh",
+        "p[style-name='List Paragraph'] => p.list-paragraph:fresh",
+        "p[style-name='Caption'] => p.caption:fresh",
+        
+        // 字符样式映射
+        "r[style-name='Strong'] => strong:fresh",
+        "r[style-name='Emphasis'] => em:fresh",
+        "r[style-name='Intense Emphasis'] => strong.intense:fresh",
+        "r[style-name='Subtle Emphasis'] => em.subtle:fresh",
+        "r[style-name='Book Title'] => cite:fresh",
+        "r[style-name='Hyperlink'] => a.hyperlink:fresh",
+        
+        // 表格样式映射
+        "table[style-name='Table Grid'] => table.grid:fresh",
+        "table[style-name='Light Shading'] => table.light-shading:fresh",
+        "table[style-name='Medium Shading 1'] => table.medium-shading:fresh",
+        "table[style-name='Dark List'] => table.dark-list:fresh"
+      ],
+      // 包含默认样式映射以获得更好的格式支持
+      includeDefaultStyleMap: true,
+      // 转换图片为base64，并保持原始尺寸
       convertImage: mammoth.images.imgElement(function(image) {
         return image.readAsBase64String().then(function(imageBuffer) {
           return {
-            src: "data:" + image.contentType + ";base64," + imageBuffer
+            src: "data:" + image.contentType + ";base64," + imageBuffer,
+            // 保持图片原始属性
+            style: "max-width: 100%; height: auto; display: block; margin: 10px auto;"
           };
         });
+      }),
+      // 保留更多文档结构信息
+      transformDocument: mammoth.transforms.paragraph(function(element) {
+        // 保留段落的对齐方式
+        if (element.alignment) {
+          return {
+            ...element,
+            styleName: element.styleName || 'Normal',
+            alignment: element.alignment
+          };
+        }
+        return element;
       })
     };
     
@@ -278,7 +386,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ParseResp
       }
       
       // 解析Word文档
-      const parseResult = await parseWordDocument(buffer)
+      const parseResult = await parseWordDocumentAdvanced(buffer)
       
       // 验证解析结果
       if (!parseResult || !parseResult.html) {

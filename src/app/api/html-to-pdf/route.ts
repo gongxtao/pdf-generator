@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
       await browser.close();
 
       // 返回PDF文件
-      return new NextResponse(pdfBuffer, {
+      return new NextResponse(pdfBuffer as any, {
         status: 200,
         headers: {
           'Content-Type': 'application/pdf',
