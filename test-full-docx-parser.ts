@@ -33,8 +33,6 @@ async function testFullDocxParser() {
     
     // 验证解析结果
     console.log('\n📊 解析结果验证:');
-  console.log('📄 文档XML前500字符:', result.documentXml?.substring(0, 500));
-  console.log('📄 body元素存在:', result.documentXml?.includes('<w:body>') || result.documentXml?.includes('<body>'));
     console.log(`✓ 页面设置: ${result.page ? '存在' : '缺失'}`);
     console.log(`✓ 段落数量: ${result.paragraphs?.length || 0}`);
     console.log(`✓ 表格数量: ${result.tables?.length || 0}`);
@@ -95,10 +93,10 @@ async function testFullDocxParser() {
         // 显示前3行的内容
         table.rows.slice(0, 3).forEach((row, rowIndex) => {
           const rowText = row.cells.map(cell => {
-            if (cell.runs && cell.runs.length > 0) {
-              return cell.runs.map(run => run.text || '').join('');
+            if (cell.content && cell.content.length > 0) {
+              return cell.content.map((content: any) => content.text || '').join('');
             }
-            return cell.text || '';
+            return '';
           }).join(' | ');
           console.log(`✓ 行 ${rowIndex + 1}: "${rowText}"`);
         });
@@ -108,7 +106,7 @@ async function testFullDocxParser() {
     console.log('\n🎉 完整功能测试完成！');
     console.log('✅ DocxParser功能验证成功');
     
-  } catch (error) {
+  } catch (error: any) {
     console.error('❌ 测试失败:', error);
     if (error.stack) {
       console.error('错误堆栈:', error.stack);

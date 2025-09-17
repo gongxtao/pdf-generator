@@ -12,7 +12,7 @@ interface HTMLPreviewProps {
   onDownload?: () => void
 }
 
-type ViewMode = 'preview' | 'code' | 'split'
+type ViewMode = 'preview' | 'code' | 'split' | 'print'
 
 export default function HTMLPreview({
   html,
@@ -39,18 +39,107 @@ export default function HTMLPreview({
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>预览文档</title>
   <style>
-    /* 重置样式 */
+    /* Word文档标准样式重置 */
     * {
       margin: 0;
       padding: 0;
       box-sizing: border-box;
     }
     
+    html {
+      font-size: 12pt;
+      -webkit-text-size-adjust: 100%;
+      -ms-text-size-adjust: 100%;
+    }
+    
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-      line-height: 1.6;
-      color: #333;
-      background-color: #fff;
+      /* Word标准字体栈 */
+      font-family: 'Times New Roman', 'SimSun', '宋体', 'Calibri', 'Arial', serif;
+      font-size: 12pt;
+      line-height: 1.15;
+      color: #000000;
+      background-color: #ffffff;
+      margin: 0;
+      padding: 20pt;
+      /* Word页面标准尺寸 A4 */
+      max-width: 595pt; /* A4宽度 */
+      min-height: 842pt; /* A4高度 */
+      margin: 0 auto;
+      box-shadow: 0 0 10px rgba(0,0,0,0.1);
+      position: relative;
+    }
+    
+    /* Word标准段落样式 */
+    p {
+      margin: 0 0 6pt 0;
+      text-align: justify;
+      text-justify: inter-ideograph;
+    }
+    
+    /* Word标准标题样式 */
+    h1, h2, h3, h4, h5, h6 {
+      font-weight: bold;
+      margin: 12pt 0 6pt 0;
+      line-height: 1.2;
+    }
+    
+    h1 { font-size: 18pt; }
+    h2 { font-size: 16pt; }
+    h3 { font-size: 14pt; }
+    h4 { font-size: 13pt; }
+    h5 { font-size: 12pt; }
+    h6 { font-size: 11pt; }
+    
+    /* Word标准表格样式 */
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin: 6pt 0;
+      font-size: inherit;
+    }
+    
+    td, th {
+      border: 0.5pt solid #000000;
+      padding: 3pt 6pt;
+      vertical-align: top;
+      text-align: left;
+    }
+    
+    th {
+      font-weight: bold;
+      background-color: #f2f2f2;
+    }
+    
+    /* Word标准列表样式 */
+    ul, ol {
+      margin: 6pt 0 6pt 24pt;
+      padding: 0;
+    }
+    
+    li {
+      margin: 0 0 3pt 0;
+    }
+    
+    /* Word标准图片样式 */
+    img {
+      max-width: 100%;
+      height: auto;
+      display: block;
+      margin: 6pt auto;
+    }
+    
+    /* 打印样式优化 */
+    @media print {
+      body {
+        box-shadow: none;
+        margin: 0;
+        padding: 20pt;
+      }
+      
+      @page {
+        size: A4;
+        margin: 2cm;
+      }
     }
     
     /* 用户自定义样式 */
@@ -159,12 +248,22 @@ export default function HTMLPreview({
                 >
                   分屏
                 </button>
+                <button
+                  onClick={() => setViewMode('print')}
+                  className={`px-3 py-1 text-xs rounded transition-colors ${
+                    viewMode === 'print'
+                      ? 'bg-blue-500 text-white'
+                      : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600'
+                  }`}
+                >
+                  打印预览
+                </button>
               </>
             )}
           </div>
 
           {/* 缩放控制 */}
-          {viewMode !== 'code' && (
+          {(viewMode === 'preview' || viewMode === 'split' || viewMode === 'print') && (
             <div className="flex items-center space-x-1">
               <button
                 onClick={() => handleZoom(scale - 25)}
@@ -257,21 +356,27 @@ export default function HTMLPreview({
       <div className="flex-1 flex overflow-hidden">
         {/* 预览模式 */}
         {viewMode === 'preview' && (
-          <div className="flex-1 bg-gray-100 dark:bg-gray-900 p-4 overflow-auto">
+          <div className="flex-1 bg-gray-200 dark:bg-gray-800 p-6 overflow-auto">
             <div 
-              className="bg-white shadow-lg mx-auto"
-              style={{ 
-                transform: `scale(${scale / 100})`,
-                transformOrigin: 'top center',
-                minHeight: '100%',
-                width: scale < 100 ? `${10000 / scale}%` : '100%'
-              }}
-            >
+                className="bg-white shadow-xl mx-auto border border-gray-300 dark:border-gray-600"
+                style={{ 
+                  transform: `scale(${scale / 100})`,
+                  transformOrigin: 'top center',
+                  width: scale < 100 ? `${10000 / scale}%` : '100%',
+                  maxWidth: '210mm', /* A4宽度 */
+                  minHeight: '297mm', /* A4高度 */
+                  aspectRatio: '210/297'
+                }}
+              >
               <iframe
                 ref={iframeRef}
-                className="w-full h-full min-h-[600px] border-0"
-                title="HTML Preview"
-                sandbox="allow-same-origin"
+                className="w-full h-full min-h-[842pt] border-0 rounded-sm"
+                title="Word文档预览"
+                sandbox="allow-same-origin allow-scripts"
+                style={{
+                  backgroundColor: '#ffffff',
+                  minHeight: '297mm'
+                }}
               />
             </div>
           </div>
@@ -312,21 +417,27 @@ export default function HTMLPreview({
         {viewMode === 'split' && showCode && (
           <>
             {/* 预览区域 */}
-            <div className="flex-1 bg-gray-100 dark:bg-gray-900 p-2 overflow-auto border-r border-gray-200 dark:border-gray-700">
+            <div className="flex-1 bg-gray-200 dark:bg-gray-800 p-3 overflow-auto border-r border-gray-200 dark:border-gray-700">
               <div 
-                className="bg-white shadow-lg mx-auto"
+                className="bg-white shadow-lg mx-auto border border-gray-300 dark:border-gray-600"
                 style={{ 
                   transform: `scale(${scale / 100})`,
                   transformOrigin: 'top center',
-                  minHeight: '100%',
-                  width: scale < 100 ? `${10000 / scale}%` : '100%'
+                  width: scale < 100 ? `${10000 / scale}%` : '100%',
+                  maxWidth: '180mm', /* 分屏模式下稍小的A4宽度 */
+                  minHeight: '240mm', /* 分屏模式下稍小的A4高度 */
+                  aspectRatio: '210/297'
                 }}
               >
                 <iframe
                   ref={iframeRef}
-                  className="w-full h-full min-h-[400px] border-0"
-                  title="HTML Preview"
-                  sandbox="allow-same-origin"
+                  className="w-full h-full min-h-[600pt] border-0 rounded-sm"
+                  title="Word文档预览"
+                  sandbox="allow-same-origin allow-scripts"
+                  style={{
+                    backgroundColor: '#ffffff',
+                    minHeight: '240mm'
+                  }}
                 />
               </div>
             </div>
@@ -358,6 +469,63 @@ export default function HTMLPreview({
               </div>
             </div>
           </>
+        )}
+
+        {/* 打印预览模式 */}
+        {viewMode === 'print' && (
+          <div className="flex-1 bg-gray-300 dark:bg-gray-700 p-8 overflow-auto">
+            <div className="max-w-4xl mx-auto">
+              {/* 页面指示器 */}
+              <div className="text-center mb-4">
+                <span className="text-sm text-gray-600 dark:text-gray-400">
+                  打印预览 - A4页面 (210mm × 297mm)
+                </span>
+              </div>
+              
+              {/* 打印页面容器 */}
+              <div 
+                className="bg-white shadow-2xl mx-auto border border-gray-400 dark:border-gray-500 relative"
+                style={{ 
+                  transform: `scale(${scale / 100})`,
+                  transformOrigin: 'top center',
+                  width: scale < 100 ? `${21000 / scale}%` : '210mm',
+                  minHeight: '297mm',
+                  maxWidth: '210mm',
+                  aspectRatio: '210/297'
+                }}
+              >
+                {/* 页面边距指示器 */}
+                <div className="absolute inset-0 pointer-events-none">
+                  {/* 上边距 */}
+                  <div className="absolute top-0 left-0 right-0 h-[20mm] border-b border-dashed border-gray-300 opacity-30"></div>
+                  {/* 下边距 */}
+                  <div className="absolute bottom-0 left-0 right-0 h-[20mm] border-t border-dashed border-gray-300 opacity-30"></div>
+                  {/* 左边距 */}
+                  <div className="absolute top-0 bottom-0 left-0 w-[20mm] border-r border-dashed border-gray-300 opacity-30"></div>
+                  {/* 右边距 */}
+                  <div className="absolute top-0 bottom-0 right-0 w-[20mm] border-l border-dashed border-gray-300 opacity-30"></div>
+                </div>
+                
+                <iframe
+                  ref={iframeRef}
+                  className="w-full h-full min-h-[297mm] border-0"
+                  title="Word文档打印预览"
+                  sandbox="allow-same-origin allow-scripts"
+                  style={{
+                    backgroundColor: '#ffffff',
+                    minHeight: '297mm'
+                  }}
+                />
+              </div>
+              
+              {/* 打印提示 */}
+              <div className="text-center mt-4">
+                <p className="text-xs text-gray-500 dark:text-gray-400">
+                  此预览显示文档在A4纸张上的打印效果，包括页面边距指示
+                </p>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>

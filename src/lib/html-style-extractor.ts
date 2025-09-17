@@ -25,8 +25,9 @@ export function extractStylesFromHTML(htmlContent: string): ExtractedStyles {
   };
 
   // 1. 提取<style>标签中的CSS
-  const styleTags = doc.querySelectorAll('style');
-  styleTags.forEach(styleTag => {
+  const styleTags = doc.getElementsByTagName('style');
+  for (let i = 0; i < styleTags.length; i++) {
+    const styleTag = styleTags[i];
     const cssText = styleTag.textContent || '';
     
     // 提取@import规则（字体导入）
@@ -54,22 +55,32 @@ export function extractStylesFromHTML(htmlContent: string): ExtractedStyles {
     if (cleanedCSS) {
       result.cssRules.push(cleanedCSS);
     }
-  });
+  }
 
   // 2. 提取<link>标签中的外部样式表
-  const linkTags = doc.querySelectorAll('link[rel="stylesheet"]');
-  linkTags.forEach(linkTag => {
+  const linkTags = doc.getElementsByTagName('link');
+  for (let i = 0; i < linkTags.length; i++) {
+    const linkTag = linkTags[i];
+    if (linkTag.getAttribute('rel') !== 'stylesheet') continue;
     const href = linkTag.getAttribute('href');
     if (href && href.includes('fonts.googleapis.com')) {
       result.fontImports.push(`@import url('${href}');`);
     }
-  });
+  }
 
   // 3. 收集所有元素的内联样式
-  const elementsWithStyle = doc.querySelectorAll('[style]');
+  const allElements = doc.getElementsByTagName('*');
+  const elementsWithStyle: Element[] = [];
+  for (let i = 0; i < allElements.length; i++) {
+    if (allElements[i].getAttribute('style')) {
+      elementsWithStyle.push(allElements[i]);
+    }
+  }
+  
   const inlineStylesMap = new Map<string, Set<string>>();
   
-  elementsWithStyle.forEach(element => {
+  for (let i = 0; i < elementsWithStyle.length; i++) {
+    const element = elementsWithStyle[i];
     const tagName = element.tagName.toLowerCase();
     const style = element.getAttribute('style') || '';
     
@@ -77,7 +88,7 @@ export function extractStylesFromHTML(htmlContent: string): ExtractedStyles {
       inlineStylesMap.set(tagName, new Set());
     }
     inlineStylesMap.get(tagName)!.add(style);
-  });
+  }
 
   // 将内联样式转换为CSS规则
   const inlineRules: string[] = [];
@@ -208,12 +219,15 @@ export function clearDynamicCSS(id: string = 'tiptap-dynamic-styles'): void {
 export function processHTMLForTiptap(htmlContent: string): string {
   const parser = new DOMParser();
   const doc = parser.parseFromString(htmlContent, 'text/html');
-  
+
   // 为有内联样式的元素添加data属性
-  const elementsWithStyle = doc.querySelectorAll('[style]');
-  elementsWithStyle.forEach(element => {
-    element.setAttribute('data-inline-style', 'true');
-  });
+  const allElementsForData = doc.getElementsByTagName('*');
+  for (let i = 0; i < allElementsForData.length; i++) {
+    const element = allElementsForData[i];
+    if (element.getAttribute('style')) {
+      element.setAttribute('data-inline-style', 'true');
+    }
+  }
   
   // 返回处理后的HTML内容
   return doc.body.innerHTML;

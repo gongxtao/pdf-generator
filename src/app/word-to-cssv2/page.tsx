@@ -79,7 +79,18 @@ class CSSTemplateExtractor {
     const analysis: any[] = []
 
     // 遍历所有有意义的元素
-    const elements = doc.querySelectorAll('h1, h2, h3, h4, h5, h6, p, span, div, table, th, td, blockquote, ul, ol, li')
+    const tagNames = ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'span', 'div', 'table', 'th', 'td', 'blockquote', 'ul', 'ol', 'li']
+    const elements: HTMLElement[] = []
+    
+    tagNames.forEach(tagName => {
+      const tagElements = doc.getElementsByTagName(tagName)
+      for (let i = 0; i < tagElements.length; i++) {
+        const element = tagElements[i] as HTMLElement
+        if (element) {
+          elements.push(element)
+        }
+      }
+    })
     
     elements.forEach((element, index) => {
       const computedStyle = this.getElementComputedStyle(element)
@@ -343,6 +354,7 @@ class CSSTemplateExtractor {
     
     return {
       css: css,
+      parameters: Object.fromEntries(parameters),
       structure: this.generateTemplateStructure(patterns),
       usage: this.generateUsageGuide(parameters)
     }

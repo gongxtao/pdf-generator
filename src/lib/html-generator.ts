@@ -48,12 +48,12 @@ export class HtmlGenerator {
     return html;
   }
 
-  // 生成页面样式
+  // 生成页面样式 - 100%还原Word文档格式
   private generatePageStyles(): string {
     const { width, height, margins } = this.pageSettings;
     
     return `
-        /* 页面基础样式 */
+        /* 页面基础样式 - 完全匹配Word文档 */
         * {
             margin: 0;
             padding: 0;
@@ -61,43 +61,49 @@ export class HtmlGenerator {
         }
         
         body {
-            font-family: 'Times New Roman', serif;
-            font-size: 12pt;
-            line-height: 1.15;
-            color: #000;
-            background: #f5f5f5;
+            font-family: 'Calibri', 'Times New Roman', '宋体', sans-serif;
+            font-size: 11pt;
+            line-height: 1.08;
+            color: #000000;
+            background: #F3F3F3;
+            margin: 0;
+            padding: 20px;
         }
         
         .document-container {
-            max-width: ${width}px;
-            margin: 20px auto;
-            background: white;
-            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            max-width: ${width || 816}pt;
+            margin: 0 auto;
+            background: #FFFFFF;
+            box-shadow: 0 0 8pt rgba(0,0,0,0.15);
             position: relative;
+            border: 1pt solid #D4D4D4;
         }
         
         .page {
-            width: ${width}px;
-            min-height: ${height}px;
-            padding: ${margins.top}px ${margins.right}px ${margins.bottom}px ${margins.left}px;
+            width: ${width || 816}pt;
+            min-height: ${height || 1056}pt;
+            padding: ${margins?.top || 72}pt ${margins?.right || 90}pt ${margins?.bottom || 72}pt ${margins?.left || 90}pt;
             position: relative;
             page-break-after: always;
-            background: white;
+            background: #FFFFFF;
+            overflow: hidden;
         }
         
         .page:last-child {
             page-break-after: auto;
         }
         
-        /* 页眉样式 */
+        /* 页眉样式 - Word格式 */
         .header {
             position: absolute;
-            top: 0;
-            left: ${margins.left}px;
-            right: ${margins.right}px;
-            height: ${margins.header}px;
-            padding: 10px 0;
-            border-bottom: 1px solid #ddd;
+            top: 36pt;
+            left: ${margins?.left || 90}pt;
+            right: ${margins?.right || 90}pt;
+            height: ${margins?.header || 36}pt;
+            padding: 0;
+            font-size: 9pt;
+            color: #595959;
+            border-bottom: none;
             font-size: 10pt;
             text-align: center;
         }
@@ -288,29 +294,63 @@ export class HtmlGenerator {
     }
   }
 
-  // 生成段落HTML
+  // 生成段落HTML - 完全还原Word格式
   private generateParagraphHtml(element: DocumentElement): string {
     const styleClass = this.getElementStyleClass(element);
     const inlineStyles = this.getElementInlineStyles(element);
     
-    return `<p class="paragraph ${styleClass}" style="${inlineStyles}" data-id="${element.id}">${element.content}</p>`;
+    // 处理空段落
+    const content = element.content || '&nbsp;';
+    
+    // 根据样式确定标签类型
+    let tag = 'p';
+    if (element.styles?.heading) {
+      const level = element.styles.heading;
+      tag = `h${Math.min(level, 6)}`;
+    }
+    
+    // 添加Word标准段落样式
+    const wordStyles = [
+      'margin: 0pt 0pt 8pt 0pt',
+      'line-height: 1.08',
+      'font-family: Calibri, sans-serif',
+      'font-size: 11pt',
+      inlineStyles
+    ].filter(Boolean).join('; ');
+    
+    return `<${tag} class="paragraph ${styleClass}" style="${wordStyles}" data-id="${element.id}">${content}</${tag}>`;
   }
 
-  // 生成表格HTML
+  // 生成表格HTML - Word标准格式
   private generateTableHtml(element: DocumentElement): string {
     const styleClass = this.getElementStyleClass(element);
     const inlineStyles = this.getElementInlineStyles(element);
     
-    // 简单的表格HTML生成
-    const rows = element.content.split('\n');
-    let tableHtml = `<table class="table ${styleClass}" style="${inlineStyles}" data-id="${element.id}">`;
+    // Word标准表格样式
+    const tableStyles = [
+      'border-collapse: collapse',
+      'border-spacing: 0',
+      'width: 100%',
+      'margin: 0pt 0pt 8pt 0pt',
+      'font-family: Calibri, sans-serif',
+      'font-size: 11pt',
+      inlineStyles
+    ].filter(Boolean).join('; ');
+    
+    // 处理表格数据
+    const rows = element.content ? element.content.split('\n') : [];
+    let tableHtml = `<table class="table ${styleClass}" style="${tableStyles}" data-id="${element.id}">`;
     
     rows.forEach((row, index) => {
       const cells = row.split('\t');
       const tag = index === 0 ? 'th' : 'td';
+      const cellStyle = tag === 'th' ? 
+        'border: 1pt solid #000000; padding: 0pt 5.4pt 0pt 5.4pt; background-color: #F2F2F2; font-weight: bold;' :
+        'border: 1pt solid #000000; padding: 0pt 5.4pt 0pt 5.4pt; vertical-align: top;';
+      
       tableHtml += '<tr>';
       cells.forEach(cell => {
-        tableHtml += `<${tag}>${cell}</${tag}>`;
+        tableHtml += `<${tag} style="${cellStyle}">${cell || '&nbsp;'}</${tag}>`;
       });
       tableHtml += '</tr>';
     });
@@ -319,7 +359,7 @@ export class HtmlGenerator {
     return tableHtml;
   }
 
-  // 生成图片HTML
+  // 生成图片HTML - Word标准格式
   private generateImageHtml(element: DocumentElement): string {
     const styleClass = this.getElementStyleClass(element);
     const inlineStyles = this.getElementInlineStyles(element);
@@ -328,7 +368,25 @@ export class HtmlGenerator {
     const imageData = this.findImageData(element);
     const src = imageData ? `data:image/png;base64,${imageData}` : '';
     
-    return `<img class="image ${styleClass}" style="${inlineStyles}" src="${src}" alt="文档图片" data-id="${element.id}">`;
+    // Word标准图片样式
+    const imageStyles = [
+      'display: block',
+      'margin: 0pt auto 8pt auto',
+      'max-width: 100%',
+      'height: auto',
+      'border: none',
+      inlineStyles
+    ].filter(Boolean).join('; ');
+    
+    // 如果有尺寸信息，使用原始尺寸
+    if (element.styles?.width || element.styles?.height) {
+      const width = element.styles.width ? `width: ${element.styles.width}pt;` : '';
+      const height = element.styles.height ? `height: ${element.styles.height}pt;` : '';
+      const sizeStyles = [width, height].filter(Boolean).join(' ');
+      return `<img class="image ${styleClass}" style="${imageStyles} ${sizeStyles}" src="${src}" alt="文档图片" data-id="${element.id}">`;
+    }
+    
+    return `<img class="image ${styleClass}" style="${imageStyles}" src="${src}" alt="文档图片" data-id="${element.id}">`;
   }
 
   // 生成页眉HTML
@@ -416,39 +474,122 @@ export class HtmlGenerator {
     return classes.join(' ');
   }
 
-  // 获取元素内联样式
+  // 获取元素内联样式 - 完整Word样式支持
   private getElementInlineStyles(element: DocumentElement): string {
+    if (!element.styles) return '';
+    
     const styles: string[] = [];
     
-    // 字体相关
+    // 字体样式 - Word标准
     if (element.styles.fontFamily) {
-      styles.push(`font-family: '${element.styles.fontFamily}', serif`);
+      styles.push(`font-family: '${element.styles.fontFamily}', Calibri, sans-serif`);
     }
-    
     if (element.styles.fontSize) {
-      const fontSize = this.convertFontSize(element.styles.fontSize);
-      styles.push(`font-size: ${fontSize}`);
+      const size = typeof element.styles.fontSize === 'number' ? 
+        `${element.styles.fontSize}pt` : element.styles.fontSize;
+      styles.push(`font-size: ${size}`);
+    }
+    if (element.styles.fontWeight) {
+      styles.push(`font-weight: ${element.styles.fontWeight}`);
+    }
+    if (element.styles.fontStyle) {
+      styles.push(`font-style: ${element.styles.fontStyle}`);
+    }
+    if (element.styles.textDecoration) {
+      styles.push(`text-decoration: ${element.styles.textDecoration}`);
     }
     
-    // 间距相关
+    // 颜色 - Word标准格式
+    if (element.styles.color) {
+      styles.push(`color: ${element.styles.color}`);
+    }
+    if (element.styles.backgroundColor) {
+      styles.push(`background-color: ${element.styles.backgroundColor}`);
+    }
+    if (element.styles.highlight) {
+      styles.push(`background-color: ${element.styles.highlight}`);
+    }
+    
+    // 对齐和布局
+    if (element.styles.textAlign) {
+      styles.push(`text-align: ${element.styles.textAlign}`);
+    }
+    if (element.styles.verticalAlign) {
+      styles.push(`vertical-align: ${element.styles.verticalAlign}`);
+    }
+    
+    // 间距 - Word标准单位
     if (element.styles.marginTop) {
-      const marginTop = this.convertSpacing(element.styles.marginTop);
-      styles.push(`margin-top: ${marginTop}`);
+      const margin = typeof element.styles.marginTop === 'number' ? 
+        `${element.styles.marginTop}pt` : element.styles.marginTop;
+      styles.push(`margin-top: ${margin}`);
     }
-    
     if (element.styles.marginBottom) {
-      const marginBottom = this.convertSpacing(element.styles.marginBottom);
-      styles.push(`margin-bottom: ${marginBottom}`);
+      const margin = typeof element.styles.marginBottom === 'number' ? 
+        `${element.styles.marginBottom}pt` : element.styles.marginBottom;
+      styles.push(`margin-bottom: ${margin}`);
+    }
+    if (element.styles.marginLeft) {
+      const margin = typeof element.styles.marginLeft === 'number' ? 
+        `${element.styles.marginLeft}pt` : element.styles.marginLeft;
+      styles.push(`margin-left: ${margin}`);
+    }
+    if (element.styles.marginRight) {
+      const margin = typeof element.styles.marginRight === 'number' ? 
+        `${element.styles.marginRight}pt` : element.styles.marginRight;
+      styles.push(`margin-right: ${margin}`);
     }
     
+    // 内边距
+    if (element.styles.paddingLeft) {
+      const padding = typeof element.styles.paddingLeft === 'number' ? 
+        `${element.styles.paddingLeft}pt` : element.styles.paddingLeft;
+      styles.push(`padding-left: ${padding}`);
+    }
+    if (element.styles.paddingRight) {
+      const padding = typeof element.styles.paddingRight === 'number' ? 
+        `${element.styles.paddingRight}pt` : element.styles.paddingRight;
+      styles.push(`padding-right: ${padding}`);
+    }
+    
+    // 行高和字符间距
     if (element.styles.lineHeight) {
       const lineHeight = this.convertLineHeight(element.styles.lineHeight);
       styles.push(`line-height: ${lineHeight}`);
     }
+    if (element.styles.letterSpacing) {
+      const spacing = typeof element.styles.letterSpacing === 'number' ? 
+        `${element.styles.letterSpacing}pt` : element.styles.letterSpacing;
+      styles.push(`letter-spacing: ${spacing}`);
+    }
     
-    // 背景相关
-    if (element.styles.backgroundColor) {
-      styles.push(`background-color: ${element.styles.backgroundColor}`);
+    // 边框
+    if (element.styles.border) {
+      styles.push(`border: ${element.styles.border}`);
+    }
+    if (element.styles.borderTop) {
+      styles.push(`border-top: ${element.styles.borderTop}`);
+    }
+    if (element.styles.borderBottom) {
+      styles.push(`border-bottom: ${element.styles.borderBottom}`);
+    }
+    if (element.styles.borderLeft) {
+      styles.push(`border-left: ${element.styles.borderLeft}`);
+    }
+    if (element.styles.borderRight) {
+      styles.push(`border-right: ${element.styles.borderRight}`);
+    }
+    
+    // 尺寸
+    if (element.styles.width) {
+      const width = typeof element.styles.width === 'number' ? 
+        `${element.styles.width}pt` : element.styles.width;
+      styles.push(`width: ${width}`);
+    }
+    if (element.styles.height) {
+      const height = typeof element.styles.height === 'number' ? 
+        `${element.styles.height}pt` : element.styles.height;
+      styles.push(`height: ${height}`);
     }
     
     return styles.join('; ');

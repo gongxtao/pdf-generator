@@ -1,6 +1,7 @@
 // 深度Word文档解析器
 // 直接解析docx文件的XML结构，获取完整的文档元数据
 import * as JSZip from 'jszip';
+import { DOMParser } from 'xmldom';
 
 // 文档元素类型定义
 export interface DocumentElement {
@@ -335,32 +336,47 @@ export class DocxParser {
   // 辅助方法：检查是否为粗体
   private isBold(rPr: Element | null): boolean {
     if (!rPr) return false;
-    const b = rPr.getElementsByTagName('w:b')[0];
+    let b = rPr.getElementsByTagName('w:b')[0];
+    if (!b) {
+      b = rPr.getElementsByTagName('b')[0];
+    }
     return b ? b.getAttribute('w:val') !== 'false' : false;
   }
 
   // 辅助方法：检查是否为斜体
   private isItalic(rPr: Element | null): boolean {
     if (!rPr) return false;
-    const i = rPr.getElementsByTagName('w:i')[0];
+    let i = rPr.getElementsByTagName('w:i')[0];
+    if (!i) {
+      i = rPr.getElementsByTagName('i')[0];
+    }
     return i ? i.getAttribute('w:val') !== 'false' : false;
   }
 
   // 辅助方法：检查是否下划线
   private isUnderline(rPr: Element | null): boolean {
     if (!rPr) return false;
-    const u = rPr.getElementsByTagName('w:u')[0];
+    let u = rPr.getElementsByTagName('w:u')[0];
+    if (!u) {
+      u = rPr.getElementsByTagName('u')[0];
+    }
     return u ? u.getAttribute('w:val') !== 'none' : false;
   }
 
   // 辅助方法：获取字体族
   private getFontFamily(rPr: Element | null): string {
     if (!rPr) return 'Times New Roman';
-    const rFonts = rPr.getElementsByTagName('w:rFonts')[0];
+    let rFonts = rPr.getElementsByTagName('w:rFonts')[0];
+    if (!rFonts) {
+      rFonts = rPr.getElementsByTagName('rFonts')[0];
+    }
     if (rFonts) {
       return rFonts.getAttribute('w:ascii') || 
+             rFonts.getAttribute('ascii') ||
              rFonts.getAttribute('w:hAnsi') || 
+             rFonts.getAttribute('hAnsi') ||
              rFonts.getAttribute('w:eastAsia') || 
+             rFonts.getAttribute('eastAsia') ||
              'Times New Roman';
     }
     return 'Times New Roman';
@@ -369,9 +385,12 @@ export class DocxParser {
   // 辅助方法：获取颜色
   private getColor(rPr: Element | null): string {
     if (!rPr) return '#000000';
-    const color = rPr.getElementsByTagName('w:color')[0];
+    let color = rPr.getElementsByTagName('w:color')[0];
+    if (!color) {
+      color = rPr.getElementsByTagName('color')[0];
+    }
     if (color) {
-      const val = color.getAttribute('w:val');
+      const val = color.getAttribute('w:val') || color.getAttribute('val');
       return val ? `#${val}` : '#000000';
     }
     return '#000000';
@@ -380,9 +399,12 @@ export class DocxParser {
   // 辅助方法：获取字体大小
   private getFontSize(rPr: Element | null): number {
     if (!rPr) return 11;
-    const sz = rPr.getElementsByTagName('w:sz')[0];
+    let sz = rPr.getElementsByTagName('w:sz')[0];
+    if (!sz) {
+      sz = rPr.getElementsByTagName('sz')[0];
+    }
     if (sz) {
-      const val = sz.getAttribute('w:val');
+      const val = sz.getAttribute('w:val') || sz.getAttribute('val');
       return val ? parseInt(val) / 2 : 11;
     }
     return 11;
@@ -396,8 +418,9 @@ export class DocxParser {
       const doc = parser.parseFromString(this.documentXml, 'text/xml');
       
       // 检查页面背景
-      const background = doc.querySelector('w\\:background, background');
-      if (background) {
+      const backgrounds = doc.getElementsByTagName('w:background');
+      if (backgrounds.length > 0) {
+        const background = backgrounds[0];
         const id = background.getAttribute('r\\:id') || background.getAttribute('id');
         if (id && this.zip && this.zip.files && Object.keys(this.zip.files).length > 0) {
           const imageData = await this.getImageByRelId(id);
@@ -413,8 +436,11 @@ export class DocxParser {
       // 检查页眉背景
       for (const [id, headerXml] of Array.from(this.headerXmls.entries())) {
         const headerDoc = parser.parseFromString(headerXml, 'text/xml');
-        const headerBackground = headerDoc.querySelector('w\\:background, background, pic\\:pic, pic');
-        if (headerBackground) {
+        const backgrounds = headerDoc.getElementsByTagName('w:background');
+        const pics = headerDoc.getElementsByTagName('pic:pic');
+        const allElements = [...Array.from(backgrounds), ...Array.from(pics)];
+        
+        for (const headerBackground of allElements) {
           const imageData = await this.extractImageFromElement(headerBackground);
           if (imageData) {
             return {
@@ -445,7 +471,14 @@ export class DocxParser {
       const relsDoc = parser.parseFromString(relsContent, 'text/xml');
       
       // 查找对应的关系
-      const relationship = relsDoc.querySelector(`Relationship[Id="${relId}"]`);
+      const relationships = relsDoc.getElementsByTagName('Relationship');
+      let relationship: Element | null = null;
+      for (let i = 0; i < relationships.length; i++) {
+        if (relationships[i].getAttribute('Id') === relId) {
+          relationship = relationships[i];
+          break;
+        }
+      }
       if (!relationship) return undefined;
 
       const target = relationship.getAttribute('Target');
@@ -476,9 +509,12 @@ export class DocxParser {
 
   private async extractImageFromElement(element: Element): Promise<string | undefined> {
     // 从XML元素中提取图片数据
-    const blip = element.querySelector('a\\:blip, blip');
-    if (blip) {
-      const embed = blip.getAttribute('r\\:embed') || blip.getAttribute('embed');
+    const aBlips = element.getElementsByTagName('a:blip');
+    const blips = element.getElementsByTagName('blip');
+    const allBlips = [...Array.from(aBlips), ...Array.from(blips)];
+    
+    for (const blip of allBlips) {
+      const embed = blip.getAttribute('r:embed') || blip.getAttribute('embed');
       if (embed) {
         return await this.getImageByRelId(embed);
       }
@@ -494,13 +530,15 @@ export class DocxParser {
     const doc = parser.parseFromString(this.stylesXml, 'text/xml');
     const styles: Record<string, any> = {};
 
-    const styleElements = doc.querySelectorAll('w\\:style, style');
-    styleElements.forEach(style => {
+    // 使用getElementsByTagName替代querySelectorAll
+    const styleElements = doc.getElementsByTagName('w:style');
+    for (let i = 0; i < styleElements.length; i++) {
+      const style = styleElements[i];
       const styleId = style.getAttribute('w:styleId') || style.getAttribute('styleId');
       if (styleId) {
         styles[styleId] = this.parseStyleElement(style);
       }
-    });
+    }
 
     return styles;
   }
@@ -513,18 +551,45 @@ export class DocxParser {
     const doc = parser.parseFromString(this.fontTableXml, 'text/xml');
     const fonts: Record<string, any> = {};
 
-    const fontElements = doc.querySelectorAll('w\\:font, font');
-    fontElements.forEach(font => {
+    // 获取所有字体元素
+    let fontElements = doc.getElementsByTagName('w:font');
+    if (fontElements.length === 0) {
+      fontElements = doc.getElementsByTagName('font');
+    }
+    
+    for (let i = 0; i < fontElements.length; i++) {
+      const font = fontElements[i];
       const name = font.getAttribute('w:name') || font.getAttribute('name');
       if (name) {
+        // 查找family元素
+        let familyElements = font.getElementsByTagName('w:family');
+        if (familyElements.length === 0) {
+          familyElements = font.getElementsByTagName('family');
+        }
+        const family = familyElements.length > 0 ? familyElements[0].getAttribute('w:val') : undefined;
+        
+        // 查找charset元素
+        let charsetElements = font.getElementsByTagName('w:charset');
+        if (charsetElements.length === 0) {
+          charsetElements = font.getElementsByTagName('charset');
+        }
+        const charset = charsetElements.length > 0 ? charsetElements[0].getAttribute('w:val') : undefined;
+        
+        // 查找pitch元素
+        let pitchElements = font.getElementsByTagName('w:pitch');
+        if (pitchElements.length === 0) {
+          pitchElements = font.getElementsByTagName('pitch');
+        }
+        const pitch = pitchElements.length > 0 ? pitchElements[0].getAttribute('w:val') : undefined;
+        
         fonts[name] = {
           name,
-          family: font.querySelector('w\\:family, family')?.getAttribute('w:val'),
-          charset: font.querySelector('w\\:charset, charset')?.getAttribute('w:val'),
-          pitch: font.querySelector('w\\:pitch, pitch')?.getAttribute('w:val')
+          family,
+          charset,
+          pitch
         };
       }
-    });
+    }
 
     return fonts;
   }
@@ -695,9 +760,19 @@ export class DocxParser {
 
   private extractPageGeometry(doc: Document): WordState['page'] {
     // 查找页面设置
-    const sectPr = doc.querySelector('w\\:sectPr, sectPr');
-    const pgSz = sectPr?.querySelector('w\\:pgSz, pgSz');
-    const pgMar = sectPr?.querySelector('w\\:pgMar, pgMar');
+    const sectPrElements = doc.getElementsByTagName('w:sectPr');
+    const sectPr = sectPrElements.length > 0 ? sectPrElements[0] : doc.getElementsByTagName('sectPr')[0];
+    
+    let pgSz: Element | null = null;
+    let pgMar: Element | null = null;
+    
+    if (sectPr) {
+      const pgSzElements = sectPr.getElementsByTagName('w:pgSz');
+      pgSz = pgSzElements.length > 0 ? pgSzElements[0] : sectPr.getElementsByTagName('pgSz')[0];
+      
+      const pgMarElements = sectPr.getElementsByTagName('w:pgMar');
+      pgMar = pgMarElements.length > 0 ? pgMarElements[0] : sectPr.getElementsByTagName('pgMar')[0];
+    }
     
     // 默认A4尺寸 (twips单位)
     const width = pgSz ? this.twipsToPixels(parseInt(pgSz.getAttribute('w:w') || '11906')) : 794;
@@ -717,31 +792,44 @@ export class DocxParser {
 
   private extractLanguageAndDirection(doc: Document): { lang: string; rtl: boolean } {
     // 提取语言设置
-    const lang = doc.querySelector('w\\:lang, lang');
+    const langElements = doc.getElementsByTagName('w:lang');
+    const lang = langElements.length > 0 ? langElements[0] : doc.getElementsByTagName('lang')[0];
     let langValue = lang?.getAttribute('w:val') || lang?.getAttribute('val') || 'zh-CN';
     
     // 检查RTL方向
-    const bidi = doc.querySelector('w\\:bidi, bidi');
+    const bidiElements = doc.getElementsByTagName('w:bidi');
+    const bidi = bidiElements.length > 0 ? bidiElements[0] : doc.getElementsByTagName('bidi')[0];
     let rtl = bidi ? bidi.getAttribute('w:val') === 'true' : false;
     
     // 从段落中提取语言信息
-    const paragraphs = doc.querySelectorAll('p');
-    for (const p of Array.from(paragraphs)) {
-      const pPr = p.querySelector('pPr');
-      const bidiElement = pPr?.querySelector('bidi');
-      if (bidiElement) {
-        rtl = true;
-        break;
+    const paragraphs = doc.getElementsByTagName('p');
+    for (let i = 0; i < paragraphs.length; i++) {
+      const p = paragraphs[i];
+      const pPrElements = p.getElementsByTagName('pPr');
+      const pPr = pPrElements.length > 0 ? pPrElements[0] : null;
+      
+      if (pPr) {
+        const bidiElements = pPr.getElementsByTagName('bidi');
+        if (bidiElements.length > 0) {
+          rtl = true;
+          break;
+        }
       }
       
       // 检查文本运行中的语言
-      const runs = p.querySelectorAll('r');
-      for (const r of Array.from(runs)) {
-        const rPr = r.querySelector('rPr');
-        const runLang = rPr?.querySelector('lang');
-        if (runLang) {
-          langValue = runLang.getAttribute('w:val') || runLang.getAttribute('val') || langValue;
-          break;
+      const runs = p.getElementsByTagName('r');
+      for (let j = 0; j < runs.length; j++) {
+        const r = runs[j];
+        const rPrElements = r.getElementsByTagName('rPr');
+        const rPr = rPrElements.length > 0 ? rPrElements[0] : null;
+        
+        if (rPr) {
+          const runLangElements = rPr.getElementsByTagName('lang');
+          const runLang = runLangElements.length > 0 ? runLangElements[0] : null;
+          if (runLang) {
+            langValue = runLang.getAttribute('w:val') || runLang.getAttribute('val') || langValue;
+            break;
+          }
         }
       }
       
@@ -755,15 +843,34 @@ export class DocxParser {
     const floatingImages: WordState['floatingImages'] = [];
     
     // 查找所有浮动图片 (wp:anchor)
-    const anchors = doc.querySelectorAll('wp\\:anchor, anchor');
+    let anchors = doc.getElementsByTagName('wp:anchor');
+    if (anchors.length === 0) {
+      anchors = doc.getElementsByTagName('anchor');
+    }
     
-    for (const anchor of Array.from(anchors)) {
-      const drawing = anchor.querySelector('a\\:graphic, graphic');
+    for (let i = 0; i < anchors.length; i++) {
+      const anchor = anchors[i];
+      
+      // 查找drawing元素
+      let drawingElements = anchor.getElementsByTagName('a:graphic');
+      if (drawingElements.length === 0) {
+        drawingElements = anchor.getElementsByTagName('graphic');
+      }
+      const drawing = drawingElements.length > 0 ? drawingElements[0] : null;
       if (!drawing) continue;
       
       // 提取位置信息
-      const positionH = anchor.querySelector('wp\\:positionH, positionH');
-      const positionV = anchor.querySelector('wp\\:positionV, positionV');
+      let positionHElements = anchor.getElementsByTagName('wp:positionH');
+      if (positionHElements.length === 0) {
+        positionHElements = anchor.getElementsByTagName('positionH');
+      }
+      const positionH = positionHElements.length > 0 ? positionHElements[0] : null;
+      
+      let positionVElements = anchor.getElementsByTagName('wp:positionV');
+      if (positionVElements.length === 0) {
+        positionVElements = anchor.getElementsByTagName('positionV');
+      }
+      const positionV = positionVElements.length > 0 ? positionVElements[0] : null;
       
       const left = this.extractPositionValue(positionH) || '0px';
       const top = this.extractPositionValue(positionV) || '0px';
@@ -773,9 +880,14 @@ export class DocxParser {
       const zIndex = behindDoc ? -1 : 1;
       
       // 提取图片
-      const blip = drawing.querySelector('a\\:blip, blip');
+      let blipElements = drawing.getElementsByTagName('a:blip');
+      if (blipElements.length === 0) {
+        blipElements = drawing.getElementsByTagName('blip');
+      }
+      const blip = blipElements.length > 0 ? blipElements[0] : null;
+      
       if (blip) {
-        const embed = blip.getAttribute('r\\:embed') || blip.getAttribute('embed');
+        const embed = blip.getAttribute('r:embed') || blip.getAttribute('embed');
         if (embed) {
           const imageData = await this.getImageByRelId(embed);
           if (imageData) {
@@ -798,7 +910,12 @@ export class DocxParser {
     if (!positionElement) return '0px';
     
     // 尝试不同的位置类型
-    const align = positionElement.querySelector('wp\\:align, align');
+    let alignElements = positionElement.getElementsByTagName('wp:align');
+    if (alignElements.length === 0) {
+      alignElements = positionElement.getElementsByTagName('align');
+    }
+    const align = alignElements.length > 0 ? alignElements[0] : null;
+    
     if (align) {
       const alignValue = align.textContent;
       switch (alignValue) {
@@ -809,7 +926,12 @@ export class DocxParser {
       }
     }
     
-    const posOffset = positionElement.querySelector('wp\\:posOffset, posOffset');
+    let posOffsetElements = positionElement.getElementsByTagName('wp:posOffset');
+    if (posOffsetElements.length === 0) {
+      posOffsetElements = positionElement.getElementsByTagName('posOffset');
+    }
+    const posOffset = posOffsetElements.length > 0 ? posOffsetElements[0] : null;
+    
     if (posOffset) {
       const offsetValue = parseInt(posOffset.textContent || '0', 10);
       return `${this.twipsToPixels(offsetValue)}px`;
@@ -819,25 +941,44 @@ export class DocxParser {
   }
 
   private extractParagraphsAndTables(doc: Document, styles: any): { paragraphs: WordState['paragraphs']; tables: WordState['tables'] } {
-    const body = doc.getElementsByTagName('w:body')[0] || doc.getElementsByTagName('body')[0];
-    if (!body) return { paragraphs: [], tables: [] };
-
     const paragraphs: WordState['paragraphs'] = [];
     const tables: WordState['tables'] = [];
 
-    // 遍历body的所有直接子元素
-    for (const child of Array.from(body.childNodes)) {
-      if (child.nodeType === 1) { // 元素节点
-        const tagName = child.tagName.toLowerCase();
-        if (tagName === 'w:p' || tagName === 'p') {
-          // 段落
-          const paragraph = this.parseParagraph(child as Element, styles);
-          if (paragraph) paragraphs.push(paragraph);
-        } else if (tagName === 'w:tbl' || tagName === 'tbl') {
-          // 表格
-          const table = this.parseTable(child as Element, styles);
-          if (table) tables.push(table);
-        }
+    // 搜索所有段落元素
+    const paragraphElements = doc.getElementsByTagName('w:p');
+    for (let i = 0; i < paragraphElements.length; i++) {
+      const element = paragraphElements[i];
+      const paragraph = this.parseParagraph(element, styles);
+      // 暂时移除null检查以便调试，但保持类型安全
+      if (paragraph !== null) paragraphs.push(paragraph);
+    }
+
+    // 如果没有找到带命名空间的段落，尝试不带命名空间的
+    if (paragraphElements.length === 0) {
+      const paragraphElementsNoNs = doc.getElementsByTagName('p');
+      for (let i = 0; i < paragraphElementsNoNs.length; i++) {
+        const element = paragraphElementsNoNs[i];
+        const paragraph = this.parseParagraph(element, styles);
+        // 暂时移除null检查以便调试，但保持类型安全
+        if (paragraph !== null) paragraphs.push(paragraph);
+      }
+    }
+
+    // 搜索所有表格元素
+    const tableElements = doc.getElementsByTagName('w:tbl');
+    for (let i = 0; i < tableElements.length; i++) {
+      const element = tableElements[i];
+      const table = this.parseTable(element, styles);
+      if (table) tables.push(table);
+    }
+
+    // 如果没有找到带命名空间的表格，尝试不带命名空间的
+    if (tableElements.length === 0) {
+      const tableElementsNoNs = doc.getElementsByTagName('tbl');
+      for (let i = 0; i < tableElementsNoNs.length; i++) {
+        const element = tableElementsNoNs[i];
+        const table = this.parseTable(element, styles);
+        if (table) tables.push(table);
       }
     }
 
@@ -853,8 +994,9 @@ export class DocxParser {
       const parser = new DOMParser();
       const doc = parser.parseFromString(xml, 'text/xml');
       
-      const paragraphs = doc.querySelectorAll('p');
-      paragraphs.forEach(p => {
+      const paragraphs = doc.getElementsByTagName('p');
+      for (let i = 0; i < paragraphs.length; i++) {
+        const p = paragraphs[i];
         headers.push({
           type: 'header',
           id: `header_${order++}`,
@@ -863,7 +1005,7 @@ export class DocxParser {
           position: { order },
           metadata: { filename }
         });
-      });
+      }
     }
 
     return headers;
@@ -878,8 +1020,9 @@ export class DocxParser {
       const parser = new DOMParser();
       const doc = parser.parseFromString(xml, 'text/xml');
       
-      const paragraphs = doc.querySelectorAll('p');
-      paragraphs.forEach(p => {
+      const paragraphs = doc.getElementsByTagName('p');
+      for (let i = 0; i < paragraphs.length; i++) {
+        const p = paragraphs[i];
         footers.push({
           type: 'footer',
           id: `footer_${order++}`,
@@ -888,7 +1031,7 @@ export class DocxParser {
           position: { order },
           metadata: { filename }
         });
-      });
+      }
     }
 
     return footers;
@@ -902,29 +1045,39 @@ export class DocxParser {
     const parser = new DOMParser();
     const doc = parser.parseFromString(this.documentXml, 'text/xml');
     
-    const backgroundElements = doc.querySelectorAll('background');
-    backgroundElements.forEach((bg, index) => {
+    const backgroundElements = doc.getElementsByTagName('background');
+    for (let i = 0; i < backgroundElements.length; i++) {
+      const bg = backgroundElements[i];
       backgrounds.push({
         type: 'background',
-        id: `background_${index}`,
+        id: `background_${i}`,
         content: '',
         styles: this.extractBackgroundStyles(bg),
-        position: { order: index }
+        position: { order: i }
       });
-    });
+    }
 
     return backgrounds;
   }
 
   private parseParagraph(element: Element, styles: any): WordState['paragraphs'][0] | null {
-    // 查找段落属性 - 使用getElementsByTagName代替querySelector
-    const pPrElements = element.getElementsByTagName('pPr');
+    // 查找段落属性 - 使用getElementsByTagName代替querySelector，支持带命名空间和不带命名空间
+    let pPrElements = element.getElementsByTagName('w:pPr');
+    if (pPrElements.length === 0) {
+      pPrElements = element.getElementsByTagName('pPr');
+    }
     const pPr = pPrElements.length > 0 ? pPrElements[0] : null;
     
-    const pStyleElements = pPr ? pPr.getElementsByTagName('pStyle') : [];
+    let pStyleElements = pPr ? pPr.getElementsByTagName('w:pStyle') : [];
+    if (pStyleElements.length === 0 && pPr) {
+      pStyleElements = pPr.getElementsByTagName('pStyle');
+    }
     const pStyle = pStyleElements.length > 0 ? pStyleElements[0] : null;
     
-    const numPrElements = pPr ? pPr.getElementsByTagName('numPr') : [];
+    let numPrElements = pPr ? pPr.getElementsByTagName('w:numPr') : [];
+    if (numPrElements.length === 0 && pPr) {
+      numPrElements = pPr.getElementsByTagName('numPr');
+    }
     const numPr = numPrElements.length > 0 ? numPrElements[0] : null;
     
     const styleId = pStyle?.getAttribute('w:val') || pStyle?.getAttribute('val') || undefined;
@@ -940,8 +1093,8 @@ export class DocxParser {
     // 提取文本内容
     const runs = this.getTextRuns(element);
     
-    // 如果段落为空，返回null
-    if (runs.length === 0) return null;
+    // 暂时注释掉空段落检查，以便调试
+    // if (runs.length === 0) return null;
     
     return {
       styleId,
@@ -954,7 +1107,12 @@ export class DocxParser {
 
   private getAlignment(pPr: Element | null): WordState['paragraphs'][0]['alignment'] {
     if (!pPr) return 'left';
-    const jcElements = pPr.getElementsByTagName('jc');
+    // 先尝试带命名空间的标签
+    let jcElements = pPr.getElementsByTagName('w:jc');
+    if (jcElements.length === 0) {
+      // 如果没找到，尝试不带命名空间的标签
+      jcElements = pPr.getElementsByTagName('jc');
+    }
     const jc = jcElements.length > 0 ? jcElements[0] : null;
     const val = jc?.getAttribute('w:val') || jc?.getAttribute('val') || 'left';
     
@@ -968,7 +1126,12 @@ export class DocxParser {
 
   private getIndent(pPr: Element | null): WordState['paragraphs'][0]['indent'] {
     if (!pPr) return {};
-    const indElements = pPr.getElementsByTagName('ind');
+    // 先尝试带命名空间的标签
+    let indElements = pPr.getElementsByTagName('w:ind');
+    if (indElements.length === 0) {
+      // 如果没找到，尝试不带命名空间的标签
+      indElements = pPr.getElementsByTagName('ind');
+    }
     const ind = indElements.length > 0 ? indElements[0] : null;
     if (!ind) return {};
     
@@ -982,7 +1145,12 @@ export class DocxParser {
 
   private getSpacing(pPr: Element | null): WordState['paragraphs'][0]['spacing'] {
     if (!pPr) return {};
-    const spacingElements = pPr.getElementsByTagName('spacing');
+    // 先尝试带命名空间的标签
+    let spacingElements = pPr.getElementsByTagName('w:spacing');
+    if (spacingElements.length === 0) {
+      // 如果没找到，尝试不带命名空间的标签
+      spacingElements = pPr.getElementsByTagName('spacing');
+    }
     const spacing = spacingElements.length > 0 ? spacingElements[0] : null;
     if (!spacing) return {};
     
@@ -1014,7 +1182,8 @@ export class DocxParser {
       
       for (const t of allTElements) {
         const text = t.textContent || '';
-        if (text) {
+        // 修改条件：即使是空白字符也要保留，因为它们可能是有意义的空格
+        if (text !== null && text !== undefined) {
           runs.push({
             text,
             bold: this.isBold(rPr),
@@ -1034,37 +1203,54 @@ export class DocxParser {
 
   private isStrike(rPr: Element | null): boolean {
     if (!rPr) return false;
-    const strike = rPr.querySelector('strike');
-    return strike !== null && strike.getAttribute('w:val') !== 'false';
+    // 先尝试带命名空间的标签
+    let strikeElements = rPr.getElementsByTagName('w:strike');
+    if (strikeElements.length === 0) {
+      // 如果没找到，尝试不带命名空间的标签
+      strikeElements = rPr.getElementsByTagName('strike');
+    }
+    const strike = strikeElements.length > 0 ? strikeElements[0] : null;
+    if (!strike) return false;
+    const val = strike.getAttribute('w:val') || strike.getAttribute('val');
+    return val !== 'false';
   }
 
   private parseTable(element: Element, styles: any): WordState['tables'][0] | null {
     const rows: WordState['tables'][0]['rows'] = [];
-    const trElements = element.querySelectorAll('tr');
+    const trElements = element.getElementsByTagName('tr');
     
     // 提取表格边框属性
-    const tblPr = element.querySelector('tblPr');
-    const tblBorders = tblPr ? tblPr.querySelector('tblBorders') : null;
+    const tblPrElements = element.getElementsByTagName('tblPr');
+    const tblPr = tblPrElements.length > 0 ? tblPrElements[0] : null;
+    const tblBordersElements = tblPr ? tblPr.getElementsByTagName('tblBorders') : null;
+    const tblBorders = tblBordersElements && tblBordersElements.length > 0 ? tblBordersElements[0] : null;
     const borders = this.extractTableBorders(tblBorders);
     
-    for (const tr of Array.from(trElements)) {
+    for (let i = 0; i < trElements.length; i++) {
+      const tr = trElements[i];
       const cells: WordState['tables'][0]['rows'][0]['cells'] = [];
-      const tcElements = tr.querySelectorAll('tc');
+      const tcElements = tr.getElementsByTagName('tc');
       
-      for (const tc of Array.from(tcElements)) {
-        const tcPr = tc.querySelector('tcPr');
-        const gridSpan = tcPr ? tcPr.querySelector('gridSpan') : null;
-        const vMerge = tcPr ? tcPr.querySelector('vMerge') : null;
+      for (let j = 0; j < tcElements.length; j++) {
+        const tc = tcElements[j];
+        const tcPrElements = tc.getElementsByTagName('tcPr');
+        const tcPr = tcPrElements.length > 0 ? tcPrElements[0] : null;
+        const gridSpanElements = tcPr ? tcPr.getElementsByTagName('gridSpan') : null;
+        const gridSpan = gridSpanElements && gridSpanElements.length > 0 ? gridSpanElements[0] : null;
+        const vMergeElements = tcPr ? tcPr.getElementsByTagName('vMerge') : null;
+        const vMerge = vMergeElements && vMergeElements.length > 0 ? vMergeElements[0] : null;
         
         // 提取单元格边框
-        const tcBorders = tcPr ? tcPr.querySelector('tcBorders') : null;
+        const tcBordersElements = tcPr ? tcPr.getElementsByTagName('tcBorders') : null;
+        const tcBorders = tcBordersElements && tcBordersElements.length > 0 ? tcBordersElements[0] : null;
         const cellBorders = this.extractTableBorders(tcBorders);
         
         // 提取单元格内容
         const content: any[] = [];
-        const pElements = tc.querySelectorAll('p');
+        const pElements = tc.getElementsByTagName('p');
         
-        for (const p of Array.from(pElements)) {
+        for (let k = 0; k < pElements.length; k++) {
+          const p = pElements[k];
           const paragraph = this.parseParagraph(p, styles);
           if (paragraph) content.push(paragraph);
         }
@@ -1100,7 +1286,8 @@ export class DocxParser {
     const borderTypes = ['top', 'bottom', 'left', 'right', 'insideH', 'insideV'];
     
     for (const type of borderTypes) {
-      const border = bordersElement.querySelector(type);
+      const borderElements = bordersElement.getElementsByTagName(type);
+      const border = borderElements.length > 0 ? borderElements[0] : null;
       if (border) {
         borders[type as keyof WordState['tables'][0]['borders']] = {
           size: parseInt(border.getAttribute('w:sz') || '4', 10) / 8, // 转换为像素
@@ -1114,8 +1301,11 @@ export class DocxParser {
   }
 
   private extractListInfo(numPr: Element): any {
-    const numId = numPr.querySelector('numId')?.getAttribute('w:val') || '0';
-    const ilvl = numPr.querySelector('ilvl')?.getAttribute('w:val') || '0';
+    const numIdElements = numPr.getElementsByTagName('numId');
+    const ilvlElements = numPr.getElementsByTagName('ilvl');
+    
+    const numId = numIdElements.length > 0 ? numIdElements[0].getAttribute('w:val') || '0' : '0';
+    const ilvl = ilvlElements.length > 0 ? ilvlElements[0].getAttribute('w:val') || '0' : '0';
     
     return {
       numId: parseInt(numId, 10),
@@ -1124,20 +1314,28 @@ export class DocxParser {
   }
 
   private extractStyles(doc: Document): void {
-    const styles = doc.querySelectorAll('style');
+    const styles = doc.getElementsByTagName('style');
     
-    for (const style of Array.from(styles)) {
+    for (let i = 0; i < styles.length; i++) {
+      const style = styles[i];
       const styleId = style.getAttribute('w:styleId') || style.getAttribute('styleId');
       if (!styleId) continue;
       
       const styleType = style.getAttribute('w:type') || style.getAttribute('type');
-      const name = style.querySelector('name')?.getAttribute('w:val') || styleId;
+      const nameElements = style.getElementsByTagName('name');
+      const name = nameElements.length > 0 ? nameElements[0].getAttribute('w:val') : styleId;
+      
+      const basedOnElements = style.getElementsByTagName('basedOn');
+      const basedOn = basedOnElements.length > 0 ? basedOnElements[0].getAttribute('w:val') : undefined;
+      
+      const nextElements = style.getElementsByTagName('next');
+      const nextStyle = nextElements.length > 0 ? nextElements[0].getAttribute('w:val') : undefined;
       
       this.state.styles[styleId] = {
-        name,
+        name: name || styleId,
         type: styleType || 'paragraph',
-        basedOn: style.querySelector('basedOn')?.getAttribute('w:val'),
-        nextStyle: style.querySelector('next')?.getAttribute('w:val'),
+        basedOn,
+        nextStyle,
         paragraph: this.extractStyleParagraphProperties(style),
         character: this.extractStyleCharacterProperties(style)
       };
@@ -1148,14 +1346,17 @@ export class DocxParser {
   }
 
   private extractDefaultProperties(doc: Document): any {
-    const docDefaults = doc.querySelector('docDefaults');
-    if (!docDefaults) return;
+    const docDefaultsElements = doc.getElementsByTagName('docDefaults');
+    if (docDefaultsElements.length === 0) return;
+    const docDefaults = docDefaultsElements[0];
     
     // 段落缺省属性
-    const pPrDefault = docDefaults.querySelector('pPrDefault');
-    if (pPrDefault) {
-      const pPr = pPrDefault.querySelector('pPr');
-      if (pPr) {
+    const pPrDefaultElements = docDefaults.getElementsByTagName('pPrDefault');
+    if (pPrDefaultElements.length > 0) {
+      const pPrDefault = pPrDefaultElements[0];
+      const pPrElements = pPrDefault.getElementsByTagName('pPr');
+      if (pPrElements.length > 0) {
+        const pPr = pPrElements[0];
         this.state.defaults.paragraph = {
           alignment: this.getAlignment(pPr),
           indent: this.getIndent(pPr),
@@ -1165,10 +1366,12 @@ export class DocxParser {
     }
     
     // 字符缺省属性
-    const rPrDefault = docDefaults.querySelector('rPrDefault');
-    if (rPrDefault) {
-      const rPr = rPrDefault.querySelector('rPr');
-      if (rPr) {
+    const rPrDefaultElements = docDefaults.getElementsByTagName('rPrDefault');
+    if (rPrDefaultElements.length > 0) {
+      const rPrDefault = rPrDefaultElements[0];
+      const rPrElements = rPrDefault.getElementsByTagName('rPr');
+      if (rPrElements.length > 0) {
+        const rPr = rPrElements[0];
         this.state.defaults.character = {
           bold: this.isBold(rPr),
           italic: this.isItalic(rPr),
@@ -1183,7 +1386,8 @@ export class DocxParser {
   }
 
   private extractStyleParagraphProperties(style: Element): any {
-    const pPr = style.querySelector('pPr');
+    const pPrElements = style.getElementsByTagName('pPr');
+    const pPr = pPrElements.length > 0 ? pPrElements[0] : null;
     if (!pPr) return {};
     
     return {
@@ -1194,7 +1398,8 @@ export class DocxParser {
   }
 
   private extractStyleCharacterProperties(style: Element): any {
-    const rPr = style.querySelector('rPr');
+    const rPrElements = style.getElementsByTagName('rPr');
+    const rPr = rPrElements.length > 0 ? rPrElements[0] : null;
     if (!rPr) return {};
     
     return {
@@ -1210,17 +1415,47 @@ export class DocxParser {
 
   // 辅助方法：提取文本内容
   private extractTextContent(element: Element): string {
-    const textNodes = element.querySelectorAll('w\\:t, t');
-    return Array.from(textNodes).map(node => node.textContent || '').join('');
+    const textNodes: Element[] = [];
+    const wTextElements = element.getElementsByTagName('w:t');
+    const tElements = element.getElementsByTagName('t');
+    
+    for (let i = 0; i < wTextElements.length; i++) {
+      textNodes.push(wTextElements[i]);
+    }
+    for (let i = 0; i < tElements.length; i++) {
+      textNodes.push(tElements[i]);
+    }
+    
+    return textNodes.map(node => node.textContent || '').join('');
   }
 
   // 辅助方法：提取表格内容
   private extractTableContent(element: Element): string {
     // 简化的表格内容提取
-    const rows = element.querySelectorAll('w\\:tr, tr');
-    return Array.from(rows).map(row => {
-      const cells = row.querySelectorAll('w\\:tc, tc');
-      return Array.from(cells).map(cell => this.extractTextContent(cell)).join('\t');
+    const rows: Element[] = [];
+    const wTrElements = element.getElementsByTagName('w:tr');
+    const trElements = element.getElementsByTagName('tr');
+    
+    for (let i = 0; i < wTrElements.length; i++) {
+      rows.push(wTrElements[i]);
+    }
+    for (let i = 0; i < trElements.length; i++) {
+      rows.push(trElements[i]);
+    }
+    
+    return rows.map(row => {
+      const cells: Element[] = [];
+      const wTcElements = row.getElementsByTagName('w:tc');
+      const tcElements = row.getElementsByTagName('tc');
+      
+      for (let i = 0; i < wTcElements.length; i++) {
+        cells.push(wTcElements[i]);
+      }
+      for (let i = 0; i < tcElements.length; i++) {
+        cells.push(tcElements[i]);
+      }
+      
+      return cells.map(cell => this.extractTextContent(cell)).join('\t');
     }).join('\n');
   }
 
@@ -1229,46 +1464,102 @@ export class DocxParser {
     const styles: Record<string, any> = {};
     
     // 提取段落属性
-    const pPr = element.querySelector('w\\:pPr, pPr');
+    let pPr: Element | null = null;
+    const pPrElements = element.getElementsByTagName('w:pPr');
+    if (pPrElements.length > 0) {
+      pPr = pPrElements[0];
+    } else {
+      const pPrElements2 = element.getElementsByTagName('pPr');
+      if (pPrElements2.length > 0) {
+        pPr = pPrElements2[0];
+      }
+    }
+    
     if (pPr) {
       // 对齐方式
-      const jc = pPr.querySelector('w\\:jc, jc');
-      if (jc) {
-        styles.textAlign = jc.getAttribute('w:val') || jc.getAttribute('val');
+      const jcElements = pPr.getElementsByTagName('w:jc');
+      if (jcElements.length > 0) {
+        styles.textAlign = jcElements[0].getAttribute('w:val') || jcElements[0].getAttribute('val');
+      } else {
+        const jcElements2 = pPr.getElementsByTagName('jc');
+        if (jcElements2.length > 0) {
+          styles.textAlign = jcElements2[0].getAttribute('w:val') || jcElements2[0].getAttribute('val');
+        }
       }
       
       // 间距
-      const spacing = pPr.querySelector('w\\:spacing, spacing');
-      if (spacing) {
+      const spacingElements = pPr.getElementsByTagName('w:spacing');
+      if (spacingElements.length > 0) {
+        const spacing = spacingElements[0];
         styles.lineHeight = spacing.getAttribute('w:line') || spacing.getAttribute('line');
         styles.marginTop = spacing.getAttribute('w:before') || spacing.getAttribute('before');
         styles.marginBottom = spacing.getAttribute('w:after') || spacing.getAttribute('after');
+      } else {
+        const spacingElements2 = pPr.getElementsByTagName('spacing');
+        if (spacingElements2.length > 0) {
+          const spacing = spacingElements2[0];
+          styles.lineHeight = spacing.getAttribute('w:line') || spacing.getAttribute('line');
+          styles.marginTop = spacing.getAttribute('w:before') || spacing.getAttribute('before');
+          styles.marginBottom = spacing.getAttribute('w:after') || spacing.getAttribute('after');
+        }
       }
     }
 
     // 提取字符属性
-    const rPr = element.querySelector('w\\:rPr, rPr');
+    let rPr: Element | null = null;
+    const rPrElements = element.getElementsByTagName('w:rPr');
+    if (rPrElements.length > 0) {
+      rPr = rPrElements[0];
+    } else {
+      const rPrElements2 = element.getElementsByTagName('rPr');
+      if (rPrElements2.length > 0) {
+        rPr = rPrElements2[0];
+      }
+    }
+    
     if (rPr) {
       // 字体
-      const fonts = rPr.querySelector('w\\:rFonts, rFonts');
-      if (fonts) {
-        styles.fontFamily = fonts.getAttribute('w:ascii') || fonts.getAttribute('ascii');
+      const fontsElements = rPr.getElementsByTagName('w:rFonts');
+      if (fontsElements.length > 0) {
+        styles.fontFamily = fontsElements[0].getAttribute('w:ascii') || fontsElements[0].getAttribute('ascii');
+      } else {
+        const fontsElements2 = rPr.getElementsByTagName('rFonts');
+        if (fontsElements2.length > 0) {
+          styles.fontFamily = fontsElements2[0].getAttribute('w:ascii') || fontsElements2[0].getAttribute('ascii');
+        }
       }
       
       // 字号
-      const sz = rPr.querySelector('w\\:sz, sz');
-      if (sz) {
-        styles.fontSize = sz.getAttribute('w:val') || sz.getAttribute('val');
+      const szElements = rPr.getElementsByTagName('w:sz');
+      if (szElements.length > 0) {
+        styles.fontSize = szElements[0].getAttribute('w:val') || szElements[0].getAttribute('val');
+      } else {
+        const szElements2 = rPr.getElementsByTagName('sz');
+        if (szElements2.length > 0) {
+          styles.fontSize = szElements2[0].getAttribute('w:val') || szElements2[0].getAttribute('val');
+        }
       }
       
       // 粗体
-      if (rPr.querySelector('w\\:b, b')) {
+      const bElements = rPr.getElementsByTagName('w:b');
+      if (bElements.length > 0) {
         styles.fontWeight = 'bold';
+      } else {
+        const bElements2 = rPr.getElementsByTagName('b');
+        if (bElements2.length > 0) {
+          styles.fontWeight = 'bold';
+        }
       }
       
       // 斜体
-      if (rPr.querySelector('w\\:i, i')) {
+      const iElements = rPr.getElementsByTagName('w:i');
+      if (iElements.length > 0) {
         styles.fontStyle = 'italic';
+      } else {
+        const iElements2 = rPr.getElementsByTagName('i');
+        if (iElements2.length > 0) {
+          styles.fontStyle = 'italic';
+        }
       }
     }
 
@@ -1289,21 +1580,43 @@ export class DocxParser {
 
   // 辅助方法：解析样式元素
   private parseStyleElement(element: Element): any {
+    // 获取样式名称
+    let styleName = '';
+    const nameElements = element.getElementsByTagName('w:name');
+    if (nameElements.length > 0) {
+      styleName = nameElements[0].getAttribute('w:val') || '';
+    } else {
+      const nameElements2 = element.getElementsByTagName('name');
+      if (nameElements2.length > 0) {
+        styleName = nameElements2[0].getAttribute('w:val') || '';
+      }
+    }
+
     const style: any = {
       type: element.getAttribute('w:type') || element.getAttribute('type'),
-      name: element.querySelector('w\\:name, name')?.getAttribute('w:val')
+      name: styleName
     };
 
     // 解析段落属性
-    const pPr = element.querySelector('w\\:pPr, pPr');
-    if (pPr) {
-      style.paragraph = this.extractElementStyles(pPr);
+    const pPrElements = element.getElementsByTagName('w:pPr');
+    if (pPrElements.length > 0) {
+      style.paragraph = this.extractElementStyles(pPrElements[0]);
+    } else {
+      const pPrElements2 = element.getElementsByTagName('pPr');
+      if (pPrElements2.length > 0) {
+        style.paragraph = this.extractElementStyles(pPrElements2[0]);
+      }
     }
 
     // 解析字符属性
-    const rPr = element.querySelector('w\\:rPr, rPr');
-    if (rPr) {
-      style.character = this.extractElementStyles(rPr);
+    const rPrElements = element.getElementsByTagName('w:rPr');
+    if (rPrElements.length > 0) {
+      style.character = this.extractElementStyles(rPrElements[0]);
+    } else {
+      const rPrElements2 = element.getElementsByTagName('rPr');
+      if (rPrElements2.length > 0) {
+        style.character = this.extractElementStyles(rPrElements2[0]);
+      }
     }
 
     return style;
@@ -1334,8 +1647,9 @@ export class DocxParser {
     const numbering: Record<string, any> = {};
 
     // 解析抽象编号定义
-    const abstractNums = doc.querySelectorAll('w\\:abstractNum, abstractNum');
-    abstractNums.forEach(abstractNum => {
+    const abstractNums = doc.getElementsByTagName('w:abstractNum');
+    for (let i = 0; i < abstractNums.length; i++) {
+      const abstractNum = abstractNums[i];
       const abstractNumId = abstractNum.getAttribute('w:abstractNumId') || abstractNum.getAttribute('abstractNumId');
       if (abstractNumId) {
         numbering[abstractNumId] = {
@@ -1343,14 +1657,39 @@ export class DocxParser {
           levels: this.extractNumberingLevels(abstractNum)
         };
       }
-    });
+    }
+
+    // 如果没有找到带命名空间的元素，尝试不带命名空间的
+    if (abstractNums.length === 0) {
+      const abstractNumsNoNs = doc.getElementsByTagName('abstractNum');
+      for (let i = 0; i < abstractNumsNoNs.length; i++) {
+        const abstractNum = abstractNumsNoNs[i];
+        const abstractNumId = abstractNum.getAttribute('w:abstractNumId') || abstractNum.getAttribute('abstractNumId');
+        if (abstractNumId) {
+          numbering[abstractNumId] = {
+            type: 'abstract',
+            levels: this.extractNumberingLevels(abstractNum)
+          };
+        }
+      }
+    }
 
     // 解析编号实例
-    const nums = doc.querySelectorAll('w\:num, num');
-    nums.forEach(num => {
+    const nums = doc.getElementsByTagName('w:num');
+    for (let i = 0; i < nums.length; i++) {
+      const num = nums[i];
       const numId = num.getAttribute('w:numId') || num.getAttribute('numId');
-      const abstractNumId = num.querySelector('w\:abstractNumId, abstractNumId')?.getAttribute('w:val') || 
-                            num.querySelector('w\:abstractNumId, abstractNumId')?.getAttribute('val');
+      const abstractNumIdElements = num.getElementsByTagName('w:abstractNumId');
+      let abstractNumId = '';
+      if (abstractNumIdElements.length > 0) {
+        abstractNumId = abstractNumIdElements[0].getAttribute('w:val') || abstractNumIdElements[0].getAttribute('val') || '';
+      } else {
+        const abstractNumIdElementsNoNs = num.getElementsByTagName('abstractNumId');
+        if (abstractNumIdElementsNoNs.length > 0) {
+          abstractNumId = abstractNumIdElementsNoNs[0].getAttribute('w:val') || abstractNumIdElementsNoNs[0].getAttribute('val') || '';
+        }
+      }
+      
       if (numId && abstractNumId) {
         numbering[numId] = {
           type: 'instance',
@@ -1358,7 +1697,34 @@ export class DocxParser {
           levels: numbering[abstractNumId]?.levels || {}
         };
       }
-    });
+    }
+
+    // 如果没有找到带命名空间的元素，尝试不带命名空间的
+    if (nums.length === 0) {
+      const numsNoNs = doc.getElementsByTagName('num');
+      for (let i = 0; i < numsNoNs.length; i++) {
+        const num = numsNoNs[i];
+        const numId = num.getAttribute('w:numId') || num.getAttribute('numId');
+        const abstractNumIdElements = num.getElementsByTagName('w:abstractNumId');
+        let abstractNumId = '';
+        if (abstractNumIdElements.length > 0) {
+          abstractNumId = abstractNumIdElements[0].getAttribute('w:val') || abstractNumIdElements[0].getAttribute('val') || '';
+        } else {
+          const abstractNumIdElementsNoNs = num.getElementsByTagName('abstractNumId');
+          if (abstractNumIdElementsNoNs.length > 0) {
+            abstractNumId = abstractNumIdElementsNoNs[0].getAttribute('w:val') || abstractNumIdElementsNoNs[0].getAttribute('val') || '';
+          }
+        }
+        
+        if (numId && abstractNumId) {
+          numbering[numId] = {
+            type: 'instance',
+            abstractNumId,
+            levels: numbering[abstractNumId]?.levels || {}
+          };
+        }
+      }
+    }
 
     return numbering;
   }
@@ -1366,29 +1732,133 @@ export class DocxParser {
   // 提取编号层级定义
   private extractNumberingLevels(abstractNum: Element): Record<string, any> {
     const levels: Record<string, any> = {};
-    const lvlElements = abstractNum.querySelectorAll('w\:lvl, lvl');
+    const lvlElements = abstractNum.getElementsByTagName('w:lvl');
     
-    lvlElements.forEach(lvl => {
+    for (let i = 0; i < lvlElements.length; i++) {
+      const lvl = lvlElements[i];
       const ilvl = lvl.getAttribute('w:ilvl') || lvl.getAttribute('ilvl') || '0';
-      const format = lvl.querySelector('w\:numFmt, numFmt')?.getAttribute('w:val') || 'decimal';
-      const text = lvl.querySelector('w\:lvlText, lvlText')?.getAttribute('w:val') || '%1.';
-      const start = lvl.querySelector('w\:start, start')?.getAttribute('w:val') || '1';
+      
+      // 获取格式
+      let format = 'decimal';
+      const numFmtElements = lvl.getElementsByTagName('w:numFmt');
+      if (numFmtElements.length > 0) {
+        format = numFmtElements[0].getAttribute('w:val') || 'decimal';
+      } else {
+        const numFmtElementsNoNs = lvl.getElementsByTagName('numFmt');
+        if (numFmtElementsNoNs.length > 0) {
+          format = numFmtElementsNoNs[0].getAttribute('w:val') || 'decimal';
+        }
+      }
+      
+      // 获取文本
+      let text = '%1.';
+      const lvlTextElements = lvl.getElementsByTagName('w:lvlText');
+      if (lvlTextElements.length > 0) {
+        text = lvlTextElements[0].getAttribute('w:val') || '%1.';
+      } else {
+        const lvlTextElementsNoNs = lvl.getElementsByTagName('lvlText');
+        if (lvlTextElementsNoNs.length > 0) {
+          text = lvlTextElementsNoNs[0].getAttribute('w:val') || '%1.';
+        }
+      }
+      
+      // 获取起始值
+      let start = '1';
+      const startElements = lvl.getElementsByTagName('w:start');
+      if (startElements.length > 0) {
+        start = startElements[0].getAttribute('w:val') || '1';
+      } else {
+        const startElementsNoNs = lvl.getElementsByTagName('start');
+        if (startElementsNoNs.length > 0) {
+          start = startElementsNoNs[0].getAttribute('w:val') || '1';
+        }
+      }
+      
+      // 检查是否为法律编号
+      const isLglElements = lvl.getElementsByTagName('w:isLgl');
+      const isLglElementsNoNs = lvl.getElementsByTagName('isLgl');
+      const isLgl = isLglElements.length > 0 || isLglElementsNoNs.length > 0;
       
       levels[ilvl] = {
         format,
         text,
         start: parseInt(start),
-        isLgl: lvl.querySelector('w\:isLgl, isLgl') !== null,
+        isLgl,
         legacy: this.extractLegacyNumbering(lvl)
       };
-    });
+    }
+    
+    // 如果没有找到带命名空间的元素，尝试不带命名空间的
+    if (lvlElements.length === 0) {
+      const lvlElementsNoNs = abstractNum.getElementsByTagName('lvl');
+      for (let i = 0; i < lvlElementsNoNs.length; i++) {
+        const lvl = lvlElementsNoNs[i];
+        const ilvl = lvl.getAttribute('w:ilvl') || lvl.getAttribute('ilvl') || '0';
+        
+        // 获取格式
+        let format = 'decimal';
+        const numFmtElements = lvl.getElementsByTagName('w:numFmt');
+        if (numFmtElements.length > 0) {
+          format = numFmtElements[0].getAttribute('w:val') || 'decimal';
+        } else {
+          const numFmtElementsNoNs = lvl.getElementsByTagName('numFmt');
+          if (numFmtElementsNoNs.length > 0) {
+            format = numFmtElementsNoNs[0].getAttribute('w:val') || 'decimal';
+          }
+        }
+        
+        // 获取文本
+        let text = '%1.';
+        const lvlTextElements = lvl.getElementsByTagName('w:lvlText');
+        if (lvlTextElements.length > 0) {
+          text = lvlTextElements[0].getAttribute('w:val') || '%1.';
+        } else {
+          const lvlTextElementsNoNs = lvl.getElementsByTagName('lvlText');
+          if (lvlTextElementsNoNs.length > 0) {
+            text = lvlTextElementsNoNs[0].getAttribute('w:val') || '%1.';
+          }
+        }
+        
+        // 获取起始值
+        let start = '1';
+        const startElements = lvl.getElementsByTagName('w:start');
+        if (startElements.length > 0) {
+          start = startElements[0].getAttribute('w:val') || '1';
+        } else {
+          const startElementsNoNs = lvl.getElementsByTagName('start');
+          if (startElementsNoNs.length > 0) {
+            start = startElementsNoNs[0].getAttribute('w:val') || '1';
+          }
+        }
+        
+        // 检查是否为法律编号
+        const isLglElements = lvl.getElementsByTagName('w:isLgl');
+        const isLglElementsNoNs = lvl.getElementsByTagName('isLgl');
+        const isLgl = isLglElements.length > 0 || isLglElementsNoNs.length > 0;
+        
+        levels[ilvl] = {
+          format,
+          text,
+          start: parseInt(start),
+          isLgl,
+          legacy: this.extractLegacyNumbering(lvl)
+        };
+      }
+    }
     
     return levels;
   }
 
   // 提取传统编号信息
   private extractLegacyNumbering(lvl: Element): any {
-    const legacy = lvl.querySelector('w\:legacy, legacy');
+    const legacyElements = lvl.getElementsByTagName('w:legacy');
+    let legacy = legacyElements.length > 0 ? legacyElements[0] : null;
+    
+    if (!legacy) {
+      const legacyElementsNoNs = lvl.getElementsByTagName('legacy');
+      legacy = legacyElementsNoNs.length > 0 ? legacyElementsNoNs[0] : null;
+    }
+    
     if (!legacy) return null;
     
     return {
@@ -1475,7 +1945,22 @@ export class DocxParser {
       ];
 
       properties.forEach(prop => {
-        const element = doc.querySelector(prop) || doc.querySelector(`dc\:${prop}`) || doc.querySelector(`dcterms\:${prop}`);
+        // 尝试查找标准属性名
+        let elements = doc.getElementsByTagName(prop);
+        let element = elements.length > 0 ? elements[0] : null;
+        
+        // 如果没找到，尝试查找 dc: 前缀的属性
+        if (!element) {
+          elements = doc.getElementsByTagName(`dc:${prop}`);
+          element = elements.length > 0 ? elements[0] : null;
+        }
+        
+        // 如果还没找到，尝试查找 dcterms: 前缀的属性
+        if (!element) {
+          elements = doc.getElementsByTagName(`dcterms:${prop}`);
+          element = elements.length > 0 ? elements[0] : null;
+        }
+        
         if (element && element.textContent) {
           metadata[prop] = element.textContent.trim();
         }
