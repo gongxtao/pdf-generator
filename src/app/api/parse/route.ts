@@ -8,6 +8,7 @@ import { CSSExtractor } from '@/lib/css-extractor'
 // import { DocxParser, DocumentStructure } from '@/lib/docx-parser'
 import { HtmlGenerator } from '@/lib/html-generator'
 import { DocxParserModular, DocumentStructure } from '@/lib/docx-parser-modular'
+import { DocxParser } from '@/lib/docx-parser'
 
 // 定义响应接口
 interface ParseResponse {
@@ -44,7 +45,7 @@ interface ParseResponse {
 async function parseWordDocumentAdvanced(buffer: Buffer): Promise<ParseResponse['data']> {
   try {
     // 使用新的docx解析器
-    const parser = new DocxParserModular();
+    const parser = new DocxParser();
     
     // 获取解析结果
     const wordState = await parser.parseDocx(buffer);
