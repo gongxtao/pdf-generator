@@ -1,9 +1,42 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DocxParser = void 0;
 // 深度Word文档解析器
 // 直接解析docx文件的XML结构，获取完整的文档元数据
-const JSZip = require("jszip");
+const JSZip = __importStar(require("jszip"));
 const xmldom_1 = require("xmldom");
 class DocxParser {
     constructor() {
@@ -31,6 +64,9 @@ class DocxParser {
             await this.extractImages();
             // 4. 主题色 → 先读 theme1.xml 拿到 Accent1-6 RGB
             const themeColors = this.extractThemeColors(this.documentXml || '');
+            // 4.5. 解析字体表 → 获取主题字体和字体映射
+            const fontTable = this.parseFonts();
+            this.state.fontTable = fontTable; // 将字体表保存到state中
             // 5. 背景图 → detectBackgroundRel(zip)
             const backgroundImage = await this.detectBackgroundImage();
             // 6. 样式表 → parseStyles(zip) → 产出 styleId → CSS 属性 映射
@@ -54,10 +90,12 @@ class DocxParser {
                 styles,
                 lang: documentData.lang,
                 rtl: documentData.rtl,
+                defaults: this.state.defaults,
                 headers,
                 footers,
                 images: Object.fromEntries(this.images),
-                metadata
+                metadata,
+                fontTable // 添加字体表到返回结果中
             };
         }
         catch (error) {
@@ -154,43 +192,173 @@ class DocxParser {
     isBold(rPr) {
         if (!rPr)
             return false;
-        const b = rPr.getElementsByTagName('w:b')[0];
+        let b = rPr.getElementsByTagName('w:b')[0];
+        if (!b) {
+            b = rPr.getElementsByTagName('b')[0];
+        }
         return b ? b.getAttribute('w:val') !== 'false' : false;
     }
     // 辅助方法：检查是否为斜体
     isItalic(rPr) {
         if (!rPr)
             return false;
-        const i = rPr.getElementsByTagName('w:i')[0];
+        let i = rPr.getElementsByTagName('w:i')[0];
+        if (!i) {
+            i = rPr.getElementsByTagName('i')[0];
+        }
         return i ? i.getAttribute('w:val') !== 'false' : false;
     }
     // 辅助方法：检查是否下划线
     isUnderline(rPr) {
         if (!rPr)
             return false;
-        const u = rPr.getElementsByTagName('w:u')[0];
+        let u = rPr.getElementsByTagName('w:u')[0];
+        if (!u) {
+            u = rPr.getElementsByTagName('u')[0];
+        }
         return u ? u.getAttribute('w:val') !== 'none' : false;
     }
     // 辅助方法：获取字体族
-    getFontFamily(rPr) {
-        if (!rPr)
-            return 'Times New Roman';
-        const rFonts = rPr.getElementsByTagName('w:rFonts')[0];
-        if (rFonts) {
-            return rFonts.getAttribute('w:ascii') ||
-                rFonts.getAttribute('w:hAnsi') ||
-                rFonts.getAttribute('w:eastAsia') ||
-                'Times New Roman';
+    getFontFamily(rPr, styleId) {
+        // 1. 直接字体定义 - 检查运行属性中的字体
+        if (rPr) {
+            const directFont = this.extractDirectFont(rPr);
+            if (directFont)
+                return directFont;
         }
-        return 'Times New Roman';
+        // 2. 样式继承字体 - 从样式中获取字体
+        if (styleId) {
+            const styleFont = this.getStyleFont(styleId);
+            if (styleFont)
+                return styleFont;
+        }
+        // 3. 主题字体 - 解析主题字体引用
+        if (rPr) {
+            const themeFont = this.resolveThemeFont(rPr);
+            if (themeFont)
+                return themeFont;
+        }
+        // 4. 文档默认字体
+        return this.getDocumentDefaultFont();
+    }
+    // 提取直接定义的字体
+    extractDirectFont(rPr) {
+        let rFonts = rPr.getElementsByTagName('w:rFonts')[0];
+        if (!rFonts) {
+            rFonts = rPr.getElementsByTagName('rFonts')[0];
+        }
+        if (rFonts) {
+            // 按优先级检查字体属性
+            const fontName = rFonts.getAttribute('w:ascii') ||
+                rFonts.getAttribute('ascii') ||
+                rFonts.getAttribute('w:hAnsi') ||
+                rFonts.getAttribute('hAnsi') ||
+                rFonts.getAttribute('w:cs') || // 复杂脚本字体
+                rFonts.getAttribute('cs') ||
+                rFonts.getAttribute('w:eastAsia') ||
+                rFonts.getAttribute('eastAsia');
+            if (fontName && fontName !== '') {
+                return fontName;
+            }
+        }
+        return null;
+    }
+    // 从样式中获取字体
+    getStyleFont(styleId) {
+        const style = this.state.styles[styleId];
+        if (style && style.character && style.character.font) {
+            return style.character.font;
+        }
+        return null;
+    }
+    // 解析主题字体引用
+    resolveThemeFont(rPr) {
+        let rFonts = rPr.getElementsByTagName('w:rFonts')[0];
+        if (!rFonts) {
+            rFonts = rPr.getElementsByTagName('rFonts')[0];
+        }
+        if (!rFonts)
+            return null;
+        // 检查主题字体引用
+        const asciiTheme = rFonts.getAttribute('w:asciiTheme') || rFonts.getAttribute('asciiTheme');
+        const hAnsiTheme = rFonts.getAttribute('w:hAnsiTheme') || rFonts.getAttribute('hAnsiTheme');
+        const csTheme = rFonts.getAttribute('w:csTheme') || rFonts.getAttribute('csTheme');
+        const eastAsiaTheme = rFonts.getAttribute('w:eastAsiaTheme') || rFonts.getAttribute('eastAsiaTheme');
+        const themeRef = asciiTheme || hAnsiTheme || csTheme || eastAsiaTheme;
+        if (themeRef) {
+            return this.getThemeFont(themeRef);
+        }
+        return null;
+    }
+    // 获取主题字体的实际字体名称
+    getThemeFont(themeRef) {
+        // Word 主题字体映射
+        const themeFontMap = {
+            'majorHAnsi': 'Aptos', // 新版 Word 的默认标题字体
+            'minorHAnsi': 'Aptos', // 新版 Word 的默认正文字体
+            'majorBidi': 'Times New Roman',
+            'minorBidi': 'Times New Roman',
+            'majorEastAsia': 'SimSun',
+            'minorEastAsia': 'SimSun'
+        };
+        // 如果有字体表信息，优先使用
+        const fontTableFont = this.getThemeFontFromTable(themeRef);
+        if (fontTableFont) {
+            return fontTableFont;
+        }
+        // 使用默认映射
+        return themeFontMap[themeRef] || 'Times New Roman';
+    }
+    // 从字体表中获取主题字体
+    getThemeFontFromTable(themeRef) {
+        if (!this.state.fontTable)
+            return null;
+        // 映射主题字体引用到字体表中的实际字体
+        switch (themeRef) {
+            case 'majorHAnsi':
+            case 'majorAscii':
+                return this.state.fontTable.majorFont?.latin || null;
+            case 'minorHAnsi':
+            case 'minorAscii':
+                return this.state.fontTable.minorFont?.latin || null;
+            case 'majorEastAsia':
+                return this.state.fontTable.majorFont?.eastAsia || null;
+            case 'minorEastAsia':
+                return this.state.fontTable.minorFont?.eastAsia || null;
+            case 'majorBidi':
+            case 'majorCs':
+                return this.state.fontTable.majorFont?.complexScript || null;
+            case 'minorBidi':
+            case 'minorCs':
+                return this.state.fontTable.minorFont?.complexScript || null;
+            default:
+                return null;
+        }
+    }
+    // 获取文档默认字体
+    getDocumentDefaultFont() {
+        // 检查文档默认样式
+        if (this.state.defaults && this.state.defaults.character && this.state.defaults.character.font) {
+            return this.state.defaults.character.font;
+        }
+        // 检查 Normal 样式
+        const normalStyle = this.state.styles['Normal'];
+        if (normalStyle && normalStyle.character && normalStyle.character.font) {
+            return normalStyle.character.font;
+        }
+        // 最后的默认值 - 使用现代 Word 的默认字体
+        return 'Calibri';
     }
     // 辅助方法：获取颜色
     getColor(rPr) {
         if (!rPr)
             return '#000000';
-        const color = rPr.getElementsByTagName('w:color')[0];
+        let color = rPr.getElementsByTagName('w:color')[0];
+        if (!color) {
+            color = rPr.getElementsByTagName('color')[0];
+        }
         if (color) {
-            const val = color.getAttribute('w:val');
+            const val = color.getAttribute('w:val') || color.getAttribute('val');
             return val ? `#${val}` : '#000000';
         }
         return '#000000';
@@ -199,9 +367,12 @@ class DocxParser {
     getFontSize(rPr) {
         if (!rPr)
             return 11;
-        const sz = rPr.getElementsByTagName('w:sz')[0];
+        let sz = rPr.getElementsByTagName('w:sz')[0];
+        if (!sz) {
+            sz = rPr.getElementsByTagName('sz')[0];
+        }
         if (sz) {
-            const val = sz.getAttribute('w:val');
+            const val = sz.getAttribute('w:val') || sz.getAttribute('val');
             return val ? parseInt(val) / 2 : 11;
         }
         return 11;
@@ -319,6 +490,29 @@ class DocxParser {
         const parser = new xmldom_1.DOMParser();
         const doc = parser.parseFromString(this.stylesXml, 'text/xml');
         const styles = {};
+        // 解析默认样式
+        const docDefaultsElements = doc.getElementsByTagName('w:docDefaults');
+        if (docDefaultsElements.length > 0) {
+            const docDefaults = docDefaultsElements[0];
+            // 解析默认段落属性
+            const pPrDefaultElements = docDefaults.getElementsByTagName('w:pPrDefault');
+            if (pPrDefaultElements.length > 0) {
+                const pPrDefault = pPrDefaultElements[0];
+                const pPrElements = pPrDefault.getElementsByTagName('w:pPr');
+                if (pPrElements.length > 0) {
+                    this.state.defaults.paragraph = this.extractParagraphProperties(pPrElements[0]);
+                }
+            }
+            // 解析默认字符属性
+            const rPrDefaultElements = docDefaults.getElementsByTagName('w:rPrDefault');
+            if (rPrDefaultElements.length > 0) {
+                const rPrDefault = rPrDefaultElements[0];
+                const rPrElements = rPrDefault.getElementsByTagName('w:rPr');
+                if (rPrElements.length > 0) {
+                    this.state.defaults.character = this.extractCharacterProperties(rPrElements[0]);
+                }
+            }
+        }
         // 使用getElementsByTagName替代querySelectorAll
         const styleElements = doc.getElementsByTagName('w:style');
         for (let i = 0; i < styleElements.length; i++) {
@@ -326,17 +520,123 @@ class DocxParser {
             const styleId = style.getAttribute('w:styleId') || style.getAttribute('styleId');
             if (styleId) {
                 styles[styleId] = this.parseStyleElement(style);
+                // 将样式信息存储到state中以便后续使用
+                this.state.styles[styleId] = styles[styleId];
             }
         }
         return styles;
     }
-    // 解析字体表
+    // 辅助方法：提取段落属性
+    extractParagraphProperties(pPr) {
+        const props = {};
+        // 对齐方式
+        const jcElements = pPr.getElementsByTagName('w:jc');
+        if (jcElements.length > 0) {
+            const val = jcElements[0].getAttribute('w:val') || jcElements[0].getAttribute('val');
+            props.alignment = val;
+        }
+        // 间距
+        const spacingElements = pPr.getElementsByTagName('w:spacing');
+        if (spacingElements.length > 0) {
+            const spacing = spacingElements[0];
+            props.spacing = {
+                before: spacing.getAttribute('w:before') || spacing.getAttribute('before'),
+                after: spacing.getAttribute('w:after') || spacing.getAttribute('after'),
+                line: spacing.getAttribute('w:line') || spacing.getAttribute('line'),
+                lineRule: spacing.getAttribute('w:lineRule') || spacing.getAttribute('lineRule')
+            };
+        }
+        // 缩进
+        const indentElements = pPr.getElementsByTagName('w:ind');
+        if (indentElements.length > 0) {
+            const indent = indentElements[0];
+            props.indent = {
+                left: indent.getAttribute('w:left') || indent.getAttribute('left'),
+                right: indent.getAttribute('w:right') || indent.getAttribute('right'),
+                firstLine: indent.getAttribute('w:firstLine') || indent.getAttribute('firstLine'),
+                hanging: indent.getAttribute('w:hanging') || indent.getAttribute('hanging')
+            };
+        }
+        return props;
+    }
+    // 辅助方法：提取字符属性
+    extractCharacterProperties(rPr) {
+        const props = {};
+        // 字体
+        const rFontsElements = rPr.getElementsByTagName('w:rFonts');
+        if (rFontsElements.length > 0) {
+            const rFonts = rFontsElements[0];
+            props.font = rFonts.getAttribute('w:ascii') || rFonts.getAttribute('ascii') ||
+                rFonts.getAttribute('w:hAnsi') || rFonts.getAttribute('hAnsi') ||
+                rFonts.getAttribute('w:eastAsia') || rFonts.getAttribute('eastAsia');
+        }
+        // 字号
+        const szElements = rPr.getElementsByTagName('w:sz');
+        if (szElements.length > 0) {
+            const val = szElements[0].getAttribute('w:val') || szElements[0].getAttribute('val');
+            props.sz = val ? parseInt(val) / 2 : undefined; // 转换为磅值
+        }
+        // 颜色
+        const colorElements = rPr.getElementsByTagName('w:color');
+        if (colorElements.length > 0) {
+            const val = colorElements[0].getAttribute('w:val') || colorElements[0].getAttribute('val');
+            props.color = val ? `#${val}` : undefined;
+        }
+        // 粗体
+        const bElements = rPr.getElementsByTagName('w:b');
+        if (bElements.length > 0) {
+            props.bold = true;
+        }
+        // 斜体
+        const iElements = rPr.getElementsByTagName('w:i');
+        if (iElements.length > 0) {
+            props.italic = true;
+        }
+        // 下划线
+        const uElements = rPr.getElementsByTagName('w:u');
+        if (uElements.length > 0) {
+            props.underline = true;
+        }
+        // 删除线
+        const strikeElements = rPr.getElementsByTagName('w:strike');
+        if (strikeElements.length > 0) {
+            props.strike = true;
+        }
+        return props;
+    }
     parseFonts() {
         if (!this.fontTableXml)
             return {};
         const parser = new xmldom_1.DOMParser();
         const doc = parser.parseFromString(this.fontTableXml, 'text/xml');
-        const fonts = {};
+        const result = {
+            fonts: {}
+        };
+        // 解析主题字体 - 在fontTable.xml中查找w:themeFonts元素
+        const themeFontElements = doc.getElementsByTagName('w:themeFonts');
+        if (themeFontElements.length > 0) {
+            const themeFonts = themeFontElements[0];
+            // 解析主要字体（标题字体）
+            const majorFontElements = themeFonts.getElementsByTagName('w:majorFont');
+            if (majorFontElements.length > 0) {
+                const majorFont = majorFontElements[0];
+                result.majorFont = {
+                    latin: this.getFontAttribute(majorFont, 'latin'),
+                    eastAsia: this.getFontAttribute(majorFont, 'eastAsia'),
+                    complexScript: this.getFontAttribute(majorFont, 'cs')
+                };
+            }
+            // 解析次要字体（正文字体）
+            const minorFontElements = themeFonts.getElementsByTagName('w:minorFont');
+            if (minorFontElements.length > 0) {
+                const minorFont = minorFontElements[0];
+                result.minorFont = {
+                    latin: this.getFontAttribute(minorFont, 'latin'),
+                    eastAsia: this.getFontAttribute(minorFont, 'eastAsia'),
+                    complexScript: this.getFontAttribute(minorFont, 'cs')
+                };
+            }
+        }
         // 获取所有字体元素
         let fontElements = doc.getElementsByTagName('w:font');
         if (fontElements.length === 0) {
@@ -345,34 +645,46 @@ class DocxParser {
         for (let i = 0; i < fontElements.length; i++) {
             const font = fontElements[i];
             const name = font.getAttribute('w:name') || font.getAttribute('name');
-            if (name) {
+            if (name && result.fonts) {
                 // 查找family元素
                 let familyElements = font.getElementsByTagName('w:family');
                 if (familyElements.length === 0) {
                     familyElements = font.getElementsByTagName('family');
                 }
-                const family = familyElements.length > 0 ? familyElements[0].getAttribute('w:val') : undefined;
+                const family = familyElements.length > 0 ? familyElements[0].getAttribute('w:val') || familyElements[0].getAttribute('val') : undefined;
                 // 查找charset元素
                 let charsetElements = font.getElementsByTagName('w:charset');
                 if (charsetElements.length === 0) {
                     charsetElements = font.getElementsByTagName('charset');
                 }
-                const charset = charsetElements.length > 0 ? charsetElements[0].getAttribute('w:val') : undefined;
-                // 查找pitch元素
-                let pitchElements = font.getElementsByTagName('w:pitch');
-                if (pitchElements.length === 0) {
-                    pitchElements = font.getElementsByTagName('pitch');
+                const charset = charsetElements.length > 0 ? charsetElements[0].getAttribute('w:val') || charsetElements[0].getAttribute('val') : undefined;
+                // 查找altName元素
+                let altNameElements = font.getElementsByTagName('w:altName');
+                if (altNameElements.length === 0) {
+                    altNameElements = font.getElementsByTagName('altName');
                 }
-                const pitch = pitchElements.length > 0 ? pitchElements[0].getAttribute('w:val') : undefined;
-                fonts[name] = {
+                const altName = altNameElements.length > 0 ? altNameElements[0].getAttribute('w:val') || altNameElements[0].getAttribute('val') : undefined;
+                result.fonts[name] = {
                     name,
-                    family,
-                    charset,
-                    pitch
+                    altName: altName || undefined,
+                    family: family || undefined,
+                    charset: charset || undefined
                 };
             }
         }
-        return fonts;
+        return result;
+    }
+    // 辅助方法：获取字体属性
+    getFontAttribute(fontElement, type) {
+        let elements = fontElement.getElementsByTagName(`w:${type}`);
+        if (elements.length === 0) {
+            elements = fontElement.getElementsByTagName(type);
+        }
+        if (elements.length > 0) {
+            const typeface = elements[0].getAttribute('w:typeface') || elements[0].getAttribute('typeface');
+            return typeface || undefined;
+        }
+        return undefined;
     }
     async parseDocumentXml(styles, themeColors) {
         if (!this.documentXml) {
@@ -665,28 +977,44 @@ class DocxParser {
         return '0px';
     }
     extractParagraphsAndTables(doc, styles) {
-        const body = doc.getElementsByTagName('w:body')[0] || doc.getElementsByTagName('body')[0];
-        if (!body)
-            return { paragraphs: [], tables: [] };
         const paragraphs = [];
         const tables = [];
-        // 遍历body的所有直接子元素
-        for (const child of Array.from(body.childNodes)) {
-            if (child.nodeType === 1) { // 元素节点
-                const element = child;
-                const tagName = element.tagName.toLowerCase();
-                if (tagName === 'w:p' || tagName === 'p') {
-                    // 段落
-                    const paragraph = this.parseParagraph(element, styles);
-                    if (paragraph)
-                        paragraphs.push(paragraph);
-                }
-                else if (tagName === 'w:tbl' || tagName === 'tbl') {
-                    // 表格
-                    const table = this.parseTable(element, styles);
-                    if (table)
-                        tables.push(table);
-                }
+        // 搜索所有段落元素
+        const paragraphElements = doc.getElementsByTagName('w:p');
+        for (let i = 0; i < paragraphElements.length; i++) {
+            const element = paragraphElements[i];
+            const paragraph = this.parseParagraph(element, styles);
+            // 暂时移除null检查以便调试，但保持类型安全
+            if (paragraph !== null)
+                paragraphs.push(paragraph);
+        }
+        // 如果没有找到带命名空间的段落，尝试不带命名空间的
+        if (paragraphElements.length === 0) {
+            const paragraphElementsNoNs = doc.getElementsByTagName('p');
+            for (let i = 0; i < paragraphElementsNoNs.length; i++) {
+                const element = paragraphElementsNoNs[i];
+                const paragraph = this.parseParagraph(element, styles);
+                // 暂时移除null检查以便调试，但保持类型安全
+                if (paragraph !== null)
+                    paragraphs.push(paragraph);
+            }
+        }
+        // 搜索所有表格元素
+        const tableElements = doc.getElementsByTagName('w:tbl');
+        for (let i = 0; i < tableElements.length; i++) {
+            const element = tableElements[i];
+            const table = this.parseTable(element, styles);
+            if (table)
+                tables.push(table);
+        }
+        // 如果没有找到带命名空间的表格，尝试不带命名空间的
+        if (tableElements.length === 0) {
+            const tableElementsNoNs = doc.getElementsByTagName('tbl');
+            for (let i = 0; i < tableElementsNoNs.length; i++) {
+                const element = tableElementsNoNs[i];
+                const table = this.parseTable(element, styles);
+                if (table)
+                    tables.push(table);
             }
         }
         return { paragraphs, tables };
@@ -755,12 +1083,21 @@ class DocxParser {
         return backgrounds;
     }
     parseParagraph(element, styles) {
-        // 查找段落属性 - 使用getElementsByTagName代替querySelector
-        const pPrElements = element.getElementsByTagName('pPr');
+        // 查找段落属性 - 使用getElementsByTagName代替querySelector，支持带命名空间和不带命名空间
+        let pPrElements = element.getElementsByTagName('w:pPr');
+        if (pPrElements.length === 0) {
+            pPrElements = element.getElementsByTagName('pPr');
+        }
         const pPr = pPrElements.length > 0 ? pPrElements[0] : null;
-        const pStyleElements = pPr ? pPr.getElementsByTagName('pStyle') : [];
+        let pStyleElements = pPr ? pPr.getElementsByTagName('w:pStyle') : [];
+        if (pStyleElements.length === 0 && pPr) {
+            pStyleElements = pPr.getElementsByTagName('pStyle');
+        }
         const pStyle = pStyleElements.length > 0 ? pStyleElements[0] : null;
-        const numPrElements = pPr ? pPr.getElementsByTagName('numPr') : [];
+        let numPrElements = pPr ? pPr.getElementsByTagName('w:numPr') : [];
+        if (numPrElements.length === 0 && pPr) {
+            numPrElements = pPr.getElementsByTagName('numPr');
+        }
         const numPr = numPrElements.length > 0 ? numPrElements[0] : null;
         const styleId = pStyle?.getAttribute('w:val') || pStyle?.getAttribute('val') || undefined;
         // 提取段落属性
@@ -770,10 +1107,9 @@ class DocxParser {
         // 提取列表信息
         const listInfo = numPr ? this.extractListInfo(numPr) : null;
         // 提取文本内容
-        const runs = this.getTextRuns(element);
-        // 如果段落为空，返回null
-        if (runs.length === 0)
-            return null;
+        const runs = this.getTextRuns(element, styleId);
+        // 暂时注释掉空段落检查，以便调试
+        // if (runs.length === 0) return null;
         return {
             styleId,
             indent,
@@ -785,7 +1121,12 @@ class DocxParser {
     getAlignment(pPr) {
         if (!pPr)
             return 'left';
-        const jcElements = pPr.getElementsByTagName('jc');
+        // 先尝试带命名空间的标签
+        let jcElements = pPr.getElementsByTagName('w:jc');
+        if (jcElements.length === 0) {
+            // 如果没找到，尝试不带命名空间的标签
+            jcElements = pPr.getElementsByTagName('jc');
+        }
         const jc = jcElements.length > 0 ? jcElements[0] : null;
         const val = jc?.getAttribute('w:val') || jc?.getAttribute('val') || 'left';
         switch (val) {
@@ -798,7 +1139,12 @@ class DocxParser {
     getIndent(pPr) {
         if (!pPr)
             return {};
-        const indElements = pPr.getElementsByTagName('ind');
+        // 先尝试带命名空间的标签
+        let indElements = pPr.getElementsByTagName('w:ind');
+        if (indElements.length === 0) {
+            // 如果没找到，尝试不带命名空间的标签
+            indElements = pPr.getElementsByTagName('ind');
+        }
         const ind = indElements.length > 0 ? indElements[0] : null;
         if (!ind)
             return {};
@@ -812,7 +1158,12 @@ class DocxParser {
     getSpacing(pPr) {
         if (!pPr)
             return {};
-        const spacingElements = pPr.getElementsByTagName('spacing');
+        // 先尝试带命名空间的标签
+        let spacingElements = pPr.getElementsByTagName('w:spacing');
+        if (spacingElements.length === 0) {
+            // 如果没找到，尝试不带命名空间的标签
+            spacingElements = pPr.getElementsByTagName('spacing');
+        }
         const spacing = spacingElements.length > 0 ? spacingElements[0] : null;
         if (!spacing)
             return {};
@@ -823,7 +1174,7 @@ class DocxParser {
             lineRule: spacing.getAttribute('w:lineRule') || spacing.getAttribute('lineRule') || 'auto'
         };
     }
-    getTextRuns(element) {
+    getTextRuns(element, paragraphStyleId) {
         const runs = [];
         // 查找w:r和r元素（带和不带命名空间）
         const wRElements = element.getElementsByTagName('w:r');
@@ -837,16 +1188,25 @@ class DocxParser {
             const rPrElements = r.getElementsByTagName('w:rPr');
             const rPrElements2 = r.getElementsByTagName('rPr');
             const rPr = rPrElements.length > 0 ? rPrElements[0] : (rPrElements2.length > 0 ? rPrElements2[0] : null);
+            // 获取运行的样式ID
+            let runStyleId;
+            if (rPr) {
+                const rStyleElements = rPr.getElementsByTagName('w:rStyle');
+                const rStyleElements2 = rPr.getElementsByTagName('rStyle');
+                const rStyle = rStyleElements.length > 0 ? rStyleElements[0] : (rStyleElements2.length > 0 ? rStyleElements2[0] : null);
+                runStyleId = rStyle?.getAttribute('w:val') || rStyle?.getAttribute('val') || undefined;
+            }
             for (const t of allTElements) {
                 const text = t.textContent || '';
-                if (text) {
+                // 修改条件：即使是空白字符也要保留，因为它们可能是有意义的空格
+                if (text !== null && text !== undefined) {
                     runs.push({
                         text,
                         bold: this.isBold(rPr),
                         italic: this.isItalic(rPr),
                         underline: this.isUnderline(rPr),
                         strike: this.isStrike(rPr),
-                        font: this.getFontFamily(rPr),
+                        font: this.getFontFamily(rPr, runStyleId || paragraphStyleId),
                         color: this.getColor(rPr),
                         sz: this.getFontSize(rPr)
                     });
@@ -858,9 +1218,17 @@ class DocxParser {
     isStrike(rPr) {
         if (!rPr)
             return false;
-        const strikeElements = rPr.getElementsByTagName('strike');
+        // 先尝试带命名空间的标签
+        let strikeElements = rPr.getElementsByTagName('w:strike');
+        if (strikeElements.length === 0) {
+            // 如果没找到，尝试不带命名空间的标签
+            strikeElements = rPr.getElementsByTagName('strike');
+        }
         const strike = strikeElements.length > 0 ? strikeElements[0] : null;
-        return strike !== null && strike.getAttribute('w:val') !== 'false';
+        if (!strike)
+            return false;
+        const val = strike.getAttribute('w:val') || strike.getAttribute('val');
+        return val !== 'false';
     }
     parseTable(element, styles) {
         const rows = [];
